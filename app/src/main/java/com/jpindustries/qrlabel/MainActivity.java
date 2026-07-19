@@ -131,11 +131,19 @@ public class MainActivity extends Activity
     private TextView scaleStatus;
     private TextView scaleBaudDropdown;
     private TextView scaleFormatDropdown;
+    private TextView scaleDiagnosticLogText;
+    private TextView scaleDiagnosticParsedText;
+    private TextView scaleDiagnosticCountText;
+    private TextView scaleDiagnosticGapText;
     private String selectedScaleBaud = "9600";
     private String selectedScaleFormat = "8N1";
     private ScanField activeScanField = ScanField.SWG;
     private boolean qrPreviewShowing;
     private boolean updatingSwgInput;
+    private boolean scaleDiagnosticRunning;
+    private int scaleDiagnosticRawCount;
+    private int scaleDiagnosticParsedCount;
+    private long scaleDiagnosticLastMessageAtMs;
     private String lastScalePreviewWeight = "";
     private long lastScalePreviewAtMs;
     private final Handler inactivityHandler = new Handler(Looper.getMainLooper());
@@ -150,6 +158,7 @@ public class MainActivity extends Activity
     };
     private final SecureRandom batchRandom = new SecureRandom();
     private final StringBuilder scannerBuffer = new StringBuilder();
+    private final StringBuilder scaleDiagnosticLog = new StringBuilder();
     private final List<BluetoothDevice> visibleBluetoothPrinters = new ArrayList<>();
     private final List<UsbDevice> visibleUsbPrinters = new ArrayList<>();
     private final List<PrinterTarget> visiblePrinters = new ArrayList<>();
@@ -616,6 +625,73 @@ public class MainActivity extends Activity
         setActiveScanField(ScanField.BRAND);
     }
 
+    private void buildScaleDiagnosticScreen() {
+        activeQrSection = "Scale Test";
+        LinearLayout shell = buildAppShell();
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setFillViewport(true);
+
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(14), dp(18), dp(14), dp(18));
+        scrollView.addView(content, matchParentWrap());
+
+        addTopBar(content, "Scale Diagnostic");
+
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(18), dp(18), dp(18), dp(18));
+        card.setBackground(roundStroke(Color.WHITE, Color.rgb(225, 229, 235), dp(10), 1));
+        content.addView(card, matchWrap());
+
+        TextView title = previewText("Scale behavior test", 18, true);
+        card.addView(title, matchWrap());
+
+        scaleStatus = deviceStatusText("Scale: Not connected");
+        card.addView(scaleStatus, spacedMatchWrap(dp(10)));
+
+        scaleDiagnosticParsedText = deviceStatusText("Last parsed: -");
+        card.addView(scaleDiagnosticParsedText, spacedMatchWrap(dp(6)));
+
+        scaleDiagnosticCountText = deviceStatusText("RAW: 0 | PARSED: 0");
+        card.addView(scaleDiagnosticCountText, spacedMatchWrap(dp(6)));
+
+        scaleDiagnosticGapText = deviceStatusText("Gap: -");
+        card.addView(scaleDiagnosticGapText, spacedMatchWrap(dp(12)));
+
+        LinearLayout firstRow = compactActionRow();
+        Button connectButton = compactButton("Connect Scale");
+        connectButton.setOnClickListener(view -> connectUsbScale());
+        Button startButton = compactButton("Start Test");
+        startButton.setOnClickListener(view -> startScaleDiagnosticTest());
+        firstRow.addView(connectButton, compactActionParams(true));
+        firstRow.addView(startButton, compactActionParams(false));
+        card.addView(firstRow, spacedMatchWrap(dp(8)));
+
+        LinearLayout secondRow = compactActionRow();
+        Button stopButton = compactButton("Stop Test");
+        stopButton.setOnClickListener(view -> stopScaleDiagnosticTest());
+        Button clearButton = compactButton("Clear Log");
+        clearButton.setOnClickListener(view -> clearScaleDiagnosticLog());
+        secondRow.addView(stopButton, compactActionParams(true));
+        secondRow.addView(clearButton, compactActionParams(false));
+        card.addView(secondRow, spacedMatchWrap(dp(14)));
+
+        scaleDiagnosticLogText = previewText("", 12, false);
+        scaleDiagnosticLogText.setTypeface(Typeface.MONOSPACE);
+        scaleDiagnosticLogText.setTextColor(Color.rgb(17, 24, 39));
+        scaleDiagnosticLogText.setPadding(dp(12), dp(12), dp(12), dp(12));
+        scaleDiagnosticLogText.setMinHeight(dp(260));
+        scaleDiagnosticLogText.setBackground(roundStroke(Color.rgb(248, 250, 252), Color.rgb(220, 224, 230), dp(8), 1));
+        card.addView(scaleDiagnosticLogText, matchWrap());
+        refreshScaleDiagnosticLog();
+
+        addContentFiller(content);
+        shell.addView(scrollView, weightedMatch());
+        shell.addView(bottomNavigation(), matchWrap());
+        setContentView(shell);
+    }
+
     private LinearLayout buildAppShell() {
         LinearLayout shell = new LinearLayout(this);
         shell.setOrientation(LinearLayout.VERTICAL);
@@ -756,6 +832,7 @@ public class MainActivity extends Activity
         nav.addView(bottomNavItem("Spool QR", "Spool", android.R.drawable.ic_menu_manage), navItemParams());
         nav.addView(bottomNavItem("Reel QR", "Reel", android.R.drawable.ic_menu_upload), navItemParams());
         nav.addView(bottomNavItem("BOX QR", "Box", android.R.drawable.ic_menu_view), navItemParams());
+        nav.addView(bottomNavItem("Scale Test", "Scale", android.R.drawable.ic_menu_info_details), navItemParams());
         return nav;
     }
 
@@ -793,6 +870,8 @@ public class MainActivity extends Activity
             buildScreen();
         } else if ("BOX QR".equals(section)) {
             buildBoxQrScreen();
+        } else if ("Scale Test".equals(section)) {
+            buildScaleDiagnosticScreen();
         } else {
             Toast.makeText(this, section + " screen is not added yet", Toast.LENGTH_SHORT).show();
         }
@@ -1925,6 +2004,94 @@ public class MainActivity extends Activity
         ScaleSerialFormat format = new ScaleSerialFormat(7, UsbSerialPort.PARITY_EVEN, UsbSerialPort.STOPBITS_1);
         setScaleStatusText("Searching for USB scale...");
         usbScaleManager.connectFirstScale(baudRate, format.dataBits, format.parity, format.stopBits);
+    }
+
+    private void startScaleDiagnosticTest() {
+        scaleDiagnosticRunning = true;
+        scaleDiagnosticRawCount = 0;
+        scaleDiagnosticParsedCount = 0;
+        scaleDiagnosticLastMessageAtMs = 0L;
+        scaleDiagnosticLog.setLength(0);
+        appendScaleDiagnosticLog("TEST STARTED");
+        updateScaleDiagnosticSummary("-", "");
+    }
+
+    private void stopScaleDiagnosticTest() {
+        scaleDiagnosticRunning = false;
+        appendScaleDiagnosticLog("TEST STOPPED");
+    }
+
+    private void clearScaleDiagnosticLog() {
+        scaleDiagnosticRawCount = 0;
+        scaleDiagnosticParsedCount = 0;
+        scaleDiagnosticLastMessageAtMs = 0L;
+        scaleDiagnosticLog.setLength(0);
+        updateScaleDiagnosticSummary("-", "");
+        refreshScaleDiagnosticLog();
+    }
+
+    private void appendScaleDiagnosticRaw(String data) {
+        if (!scaleDiagnosticRunning) {
+            return;
+        }
+        long now = android.os.SystemClock.elapsedRealtime();
+        String gapText = scaleDiagnosticLastMessageAtMs == 0L ? "-" : (now - scaleDiagnosticLastMessageAtMs) + " ms";
+        scaleDiagnosticLastMessageAtMs = now;
+        scaleDiagnosticRawCount++;
+        appendScaleDiagnosticLog(timestampText() + " RAW    [" + gapText + "] " + data);
+        updateScaleDiagnosticSummary(gapText, null);
+    }
+
+    private void appendScaleDiagnosticParsed(String weight) {
+        if (!scaleDiagnosticRunning) {
+            return;
+        }
+        scaleDiagnosticParsedCount++;
+        appendScaleDiagnosticLog(timestampText() + " PARSED " + weight);
+        updateScaleDiagnosticSummary(null, weight);
+    }
+
+    private void appendScaleDiagnosticLog(String line) {
+        if (scaleDiagnosticLog.length() > 0) {
+            scaleDiagnosticLog.append('\n');
+        }
+        scaleDiagnosticLog.append(line);
+        trimScaleDiagnosticLog();
+        refreshScaleDiagnosticLog();
+    }
+
+    private void trimScaleDiagnosticLog() {
+        int maxLength = 12000;
+        if (scaleDiagnosticLog.length() <= maxLength) {
+            return;
+        }
+        scaleDiagnosticLog.delete(0, scaleDiagnosticLog.length() - maxLength);
+        int firstLineBreak = scaleDiagnosticLog.indexOf("\n");
+        if (firstLineBreak >= 0) {
+            scaleDiagnosticLog.delete(0, firstLineBreak + 1);
+        }
+    }
+
+    private void refreshScaleDiagnosticLog() {
+        if (scaleDiagnosticLogText != null) {
+            scaleDiagnosticLogText.setText(scaleDiagnosticLog.length() == 0 ? "No scale data logged yet." : scaleDiagnosticLog.toString());
+        }
+    }
+
+    private void updateScaleDiagnosticSummary(String gapText, String parsedWeight) {
+        if (scaleDiagnosticCountText != null) {
+            scaleDiagnosticCountText.setText("RAW: " + scaleDiagnosticRawCount + " | PARSED: " + scaleDiagnosticParsedCount);
+        }
+        if (gapText != null && scaleDiagnosticGapText != null) {
+            scaleDiagnosticGapText.setText("Gap: " + gapText);
+        }
+        if (parsedWeight != null && scaleDiagnosticParsedText != null) {
+            scaleDiagnosticParsedText.setText(parsedWeight.isEmpty() ? "Last parsed: -" : "Last parsed: " + parsedWeight);
+        }
+    }
+
+    private String timestampText() {
+        return new SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(new Date());
     }
 
     private int parseScaleBaud() {
@@ -3682,7 +3849,9 @@ public class MainActivity extends Activity
             return;
         }
         String normalizedWeight = normalizeWeightText(weight);
-        if ("Spool QR".equals(activeQrSection)) {
+        if ("Scale Test".equals(activeQrSection)) {
+            appendScaleDiagnosticParsed(normalizedWeight);
+        } else if ("Spool QR".equals(activeQrSection)) {
             setSpoolWeight(normalizedWeight, true);
         } else if ("Reel QR".equals(activeQrSection)) {
             if (getCurrentFocus() != grossWeightInput) {
@@ -3701,6 +3870,9 @@ public class MainActivity extends Activity
     public void onScaleRawData(String data) {
         if (data == null || data.trim().isEmpty()) {
             return;
+        }
+        if ("Scale Test".equals(activeQrSection)) {
+            appendScaleDiagnosticRaw(data.trim());
         }
         setScaleStatusText("Scale data: " + data.trim());
     }
