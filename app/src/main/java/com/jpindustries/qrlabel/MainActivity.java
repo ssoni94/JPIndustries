@@ -2255,11 +2255,7 @@ public class MainActivity extends Activity
         lastScalePreviewWeight = "";
         lastScalePreviewAtMs = 0L;
         buildScreen();
-        getWindow().getDecorView().post(() -> {
-            if (tareWeightInput != null) {
-                tareWeightInput.requestFocus();
-            }
-        });
+        getWindow().getDecorView().post(() -> setActiveScanField(ScanField.TARE_WEIGHT));
     }
 
     private void requestBluetoothPermissions() {
@@ -3854,7 +3850,7 @@ public class MainActivity extends Activity
         } else if ("Spool QR".equals(activeQrSection)) {
             setSpoolWeight(normalizedWeight, true);
         } else if ("Reel QR".equals(activeQrSection)) {
-            if (getCurrentFocus() != grossWeightInput) {
+            if (activeScanField != ScanField.GROSS_WEIGHT) {
                 setScaleStatusText("Scale weight ignored until Gross Wt. is active");
                 return;
             }
