@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560" viewBox="0 0 900 560">
+  <rect width="900" height="560" fill="#ffffff"/>
+  <rect x="2" y="2" width="896" height="556" fill="none" stroke="#111111" stroke-width="3"/>
+
+  <text x="70" y="78" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="700">JPI</text>
+
+  <text x="115" y="170" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="700">S.W.G</text>
+  <text x="136" y="238" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="700">25P</text>
+  <text x="136" y="300" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="700">BLACK</text>
+
+  <g transform="translate(420 54) scale(5)">
+    <rect width="38" height="38" fill="#ffffff"/>
+    <path fill="#000000" d="M0 0h7v7H0zM2 2h3v3H2zM31 0h7v7h-7zM33 2h3v3h-3zM0 31h7v7H0zM2 33h3v3H2z"/>
+    <path fill="#000000" d="M10 2h2v2h-2zM14 1h1v3h-1zM17 2h4v1h-4zM23 1h2v2h-2zM27 4h2v2h-2zM9 8h2v4H9zM13 9h3v1h-3zM18 8h2v2h-2zM22 9h5v1h-5zM29 8h1v3h-1zM12 13h2v2h-2zM16 12h4v2h-4zM21 14h2v3h-2zM25 13h3v2h-3zM30 12h2v4h-2zM8 17h4v2H8zM14 18h2v3h-2zM18 17h1v2h-1zM20 20h5v1h-5zM27 18h3v2h-3zM32 17h2v5h-2zM9 23h2v4H9zM13 24h4v1h-4zM19 23h3v3h-3zM24 25h2v2h-2zM28 23h3v1h-3zM33 25h2v2h-2zM10 29h4v1h-4zM16 28h2v3h-2zM20 29h3v2h-3zM25 28h4v1h-4zM31 29h2v1h-2zM9 33h3v2H9zM14 34h1v3h-1zM17 33h4v1h-4zM23 35h3v2h-3zM28 33h5v1h-5zM35 35h2v2h-2z"/>
+  </g>
+
+  <text x="520" y="326" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="700">NET WT.</text>
+  <text x="420" y="450" font-family="Arial, Helvetica, sans-serif" font-size="84" font-weight="700">21.06 kg</text>
+
+</svg>

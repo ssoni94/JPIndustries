@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600" viewBox="0 0 900 600">
+  <rect width="900" height="600" fill="#ffffff"/>
+  <rect x="2" y="2" width="896" height="596" fill="none" stroke="#bdbdbd" stroke-width="2"/>
+  <line x1="2" y1="58" x2="898" y2="58" stroke="#bdbdbd" stroke-width="2"/>
+  <line x1="2" y1="148" x2="898" y2="148" stroke="#bdbdbd" stroke-width="2"/>
+  <line x1="2" y1="238" x2="898" y2="238" stroke="#bdbdbd" stroke-width="2"/>
+  <line x1="2" y1="328" x2="898" y2="328" stroke="#bdbdbd" stroke-width="2"/>
+  <line x1="2" y1="418" x2="898" y2="418" stroke="#bdbdbd" stroke-width="2"/>
+
+  <text x="450" y="44" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">
+    SUPER ENAMELLED COPPER WINDING WIRE
+  </text>
+
+  <text x="18" y="120" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="700">SWG-27P</text>
+  <text x="465" y="120" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700">COLOR-Off white</text>
+
+  <text x="18" y="210" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="700">GROSS WT-21.560kg</text>
+
+  <g transform="translate(704 164) scale(3.24)">
+    <rect width="38" height="38" fill="#ffffff"/>
+    <path fill="#000000" d="M0 0h7v7H0zM2 2h3v3H2zM31 0h7v7h-7zM33 2h3v3h-3zM0 31h7v7H0zM2 33h3v3H2z"/>
+    <path fill="#000000" d="M10 2h2v2h-2zM14 1h1v3h-1zM17 2h4v1h-4zM23 1h2v2h-2zM27 4h2v2h-2zM9 8h2v4H9zM13 9h3v1h-3zM18 8h2v2h-2zM22 9h5v1h-5zM29 8h1v3h-1zM12 13h2v2h-2zM16 12h4v2h-4zM21 14h2v3h-2zM25 13h3v2h-3zM30 12h2v4h-2zM8 17h4v2H8zM14 18h2v3h-2zM18 17h1v2h-1zM20 20h5v1h-5zM27 18h3v2h-3zM32 17h2v5h-2zM9 23h2v4H9zM13 24h4v1h-4zM19 23h3v3h-3zM24 25h2v2h-2zM28 23h3v1h-3zM33 25h2v2h-2zM10 29h4v1h-4zM16 28h2v3h-2zM20 29h3v2h-3zM25 28h4v1h-4zM31 29h2v1h-2zM9 33h3v2H9zM14 34h1v3h-1zM17 33h4v1h-4zM23 35h3v2h-3zM28 33h5v1h-5zM35 35h2v2h-2z"/>
+  </g>
+
+  <text x="18" y="300" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="700">TARE WT-0.500kg</text>
+  <text x="18" y="390" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="700">NETT WT-21.060kg</text>
+  <text x="18" y="470" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">PACKED BY-paras2545</text>
+</svg>

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="900" viewBox="0 0 900 900">
+  <rect width="900" height="900" fill="#ffffff"/>
+  <rect x="18" y="18" width="864" height="864" fill="none" stroke="#cbd5e1" stroke-width="4"/>
+  <line x1="18" y1="118" x2="882" y2="118" stroke="#cbd5e1" stroke-width="4"/>
+  <line x1="18" y1="250" x2="882" y2="250" stroke="#cbd5e1" stroke-width="4"/>
+  <line x1="18" y1="710" x2="882" y2="710" stroke="#cbd5e1" stroke-width="4"/>
+
+  <text x="450" y="62" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="40" font-weight="700">JPI</text>
+  <text x="450" y="104" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">FINE COPPER WIRE</text>
+
+  <text x="48" y="166" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">SWG</text>
+  <text x="220" y="170" font-family="Arial, Helvetica, sans-serif" font-size="46" font-weight="700">25P</text>
+  <text x="48" y="220" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">COLOR</text>
+  <text x="220" y="220" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700">Black</text>
+
+  <g transform="translate(640 136) scale(4.95)">
+    <rect width="38" height="38" fill="#ffffff"/>
+    <path fill="#000000" d="M0 0h7v7H0zM2 2h3v3H2zM31 0h7v7h-7zM33 2h3v3h-3zM0 31h7v7H0zM2 33h3v3H2z"/>
+    <path fill="#000000" d="M10 2h2v2h-2zM14 1h1v3h-1zM17 2h4v1h-4zM23 1h2v2h-2zM27 4h2v2h-2zM9 8h2v4H9zM13 9h3v1h-3zM18 8h2v2h-2zM22 9h5v1h-5zM29 8h1v3h-1zM12 13h2v2h-2zM16 12h4v2h-4zM21 14h2v3h-2zM25 13h3v2h-3zM30 12h2v4h-2zM8 17h4v2H8zM14 18h2v3h-2zM18 17h1v2h-1zM20 20h5v1h-5zM27 18h3v2h-3zM32 17h2v5h-2zM9 23h2v4H9zM13 24h4v1h-4zM19 23h3v3h-3zM24 25h2v2h-2zM28 23h3v1h-3zM33 25h2v2h-2zM10 29h4v1h-4zM16 28h2v3h-2zM20 29h3v2h-3zM25 28h4v1h-4zM31 29h2v1h-2zM9 33h3v2H9zM14 34h1v3h-1zM17 33h4v1h-4zM23 35h3v2h-3zM28 33h5v1h-5zM35 35h2v2h-2z"/>
+  </g>
+
+  <text x="48" y="306" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">REEL NET WEIGHTS</text>
+  <text x="92" y="372" font-family="Arial, Helvetica, sans-serif" font-size="34">2.780 kg</text>
+  <text x="92" y="444" font-family="Arial, Helvetica, sans-serif" font-size="34">2.760 kg</text>
+  <text x="92" y="516" font-family="Arial, Helvetica, sans-serif" font-size="34">2.880 kg</text>
+  <text x="92" y="588" font-family="Arial, Helvetica, sans-serif" font-size="34">2.400 kg</text>
+  <text x="500" y="372" font-family="Arial, Helvetica, sans-serif" font-size="34">2.680 kg</text>
+  <text x="500" y="444" font-family="Arial, Helvetica, sans-serif" font-size="34">2.550 kg</text>
+  <text x="500" y="516" font-family="Arial, Helvetica, sans-serif" font-size="34">2.420 kg</text>
+  <text x="500" y="588" font-family="Arial, Helvetica, sans-serif" font-size="34">2.590 kg</text>
+
+  <text x="48" y="770" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">TOTAL NET WT.</text>
+  <text x="48" y="850" font-family="Arial, Helvetica, sans-serif" font-size="76" font-weight="700">21.060 kg</text>
+  <text x="590" y="850" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">BY-paras2545</text>
+</svg>
