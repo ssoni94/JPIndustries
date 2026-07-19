@@ -74,7 +74,7 @@ public class MainActivity extends Activity
             "", "Black", "Green", "Off white", "White"
     };
     private static final String[] SPOOL_SIZE_OPTIONS = {
-            "", "2\"", "4\"", "6\"", "8\""
+            "", "2\"", "4\"", "6\"", "8\"", "10\""
     };
     private static final String[] BRAND_OPTIONS = {
             "", "Treveni", "JIPRO", "Indica", "JPI"
@@ -359,21 +359,6 @@ public class MainActivity extends Activity
         card.setBackground(roundStroke(Color.WHITE, Color.rgb(225, 229, 235), dp(10), 1));
         content.addView(card, matchWrap());
 
-        TextView section = new TextView(this);
-        section.setText("LABEL PRINTING");
-        section.setTextSize(13);
-        section.setTypeface(Typeface.DEFAULT_BOLD);
-        section.setTextColor(Color.rgb(107, 114, 128));
-        card.addView(section, matchWrap());
-
-        TextView title = new TextView(this);
-        title.setText("JP Industries QR Label");
-        title.setTextSize(23);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
-        title.setTextColor(Color.rgb(17, 24, 39));
-        title.setPadding(0, dp(4), 0, dp(18));
-        card.addView(title, matchWrap());
-
         reelBatchCountDropdown = dropdownField();
         setDropdownText(reelBatchCountDropdown, String.valueOf(selectedReelBatchCount));
         reelBatchCountDropdown.setOnClickListener(view -> showDropdown(reelBatchCountDropdown, REEL_BATCH_COUNT_OPTIONS, value -> selectReelBatchCount(value)));
@@ -424,6 +409,9 @@ public class MainActivity extends Activity
         netWeightInput.setBackground(roundStroke(Color.rgb(248, 250, 252), Color.rgb(220, 224, 230), dp(9), 1));
         addLabeledView(card, "Net Wt.", netWeightInput);
 
+        LinearLayout reelActionRow = compactActionRow();
+        Button resetReelButton = secondaryButton("Reset Form");
+        resetReelButton.setOnClickListener(view -> resetReelForm());
         generateQrButton = primaryButton("Print Label", false);
         generateQrButton.setText("Print Label");
         generateQrButton.setOnClickListener(view -> {
@@ -433,7 +421,9 @@ public class MainActivity extends Activity
                 printSingleReelIfReady();
             }
         });
-        card.addView(generateQrButton, spacedMatchWrap(dp(14)));
+        reelActionRow.addView(resetReelButton, compactActionParams(true));
+        reelActionRow.addView(generateQrButton, compactActionParams(false));
+        card.addView(reelActionRow, spacedMatchWrap(dp(14)));
         updateGenerateButtonState();
 
         addDevicePanel(content, true);
@@ -2260,6 +2250,25 @@ public class MainActivity extends Activity
                 tareWeightInput.requestFocus();
             }
         });
+    }
+
+    private void resetReelForm() {
+        selectedSwg = "";
+        selectedColour = "";
+        selectedSpoolSize = "";
+        tareWeight = "";
+        grossWeight = "";
+        netWeight = "";
+        activeSingleReelId = "";
+        activeReelBatchId = "";
+        printedReelsInBatch = 0;
+        reelBatchNetWeights.clear();
+        reelBatchItems.clear();
+        clearLastCompletedReelBatch();
+        lastScalePreviewWeight = "";
+        lastScalePreviewAtMs = 0L;
+        buildScreen();
+        getWindow().getDecorView().post(() -> setActiveScanField(ScanField.SWG));
     }
 
     private void requestBluetoothPermissions() {
