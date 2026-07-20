@@ -276,6 +276,12 @@ public class MainActivity extends Activity
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             resetInactivityTimer();
         }
+        if (event.getAction() == KeyEvent.ACTION_UP
+                && (event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                || event.getKeyCode() == KeyEvent.KEYCODE_NUMPAD_ENTER
+                || event.getKeyCode() == KeyEvent.KEYCODE_TAB)) {
+            return true;
+        }
         if (event.getAction() != KeyEvent.ACTION_DOWN) {
             return super.dispatchKeyEvent(event);
         }
@@ -2435,6 +2441,9 @@ public class MainActivity extends Activity
             return false;
         });
         input.setOnEditorActionListener((view, actionId, event) -> {
+            if (event != null && event.getAction() != KeyEvent.ACTION_DOWN) {
+                return false;
+            }
             selectSwg(input.getText().toString(), true);
             return false;
         });
@@ -2476,6 +2485,9 @@ public class MainActivity extends Activity
             return false;
         });
         input.setOnEditorActionListener((view, actionId, event) -> {
+            if (event != null && event.getAction() != KeyEvent.ACTION_DOWN) {
+                return false;
+            }
             selected.onSelected(input.getText().toString().trim());
             return true;
         });
