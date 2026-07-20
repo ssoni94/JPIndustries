@@ -74,7 +74,7 @@ public class MainActivity extends Activity
             "", "Black", "Green", "Off white", "White"
     };
     private static final String[] SPOOL_SIZE_OPTIONS = {
-            "", "2\"", "4\"", "6\"", "8\""
+            "", "2\"", "4\"", "6\"", "8\"", "10\""
     };
     private static final String[] BRAND_OPTIONS = {
             "", "Treveni", "JIPRO", "Indica", "JPI"
