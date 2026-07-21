@@ -57,7 +57,7 @@ public class MainActivity extends Activity
     private static final int BLUETOOTH_PERMISSION_REQUEST = 1001;
     private static final long SCALE_PREVIEW_DEBOUNCE_MS = 2500L;
     private static final long SCALE_PRINT_DELAY_MS = 300L;
-    private static final long INACTIVITY_LOGOUT_MS = 90_000L;
+    private static final long INACTIVITY_LOGOUT_MS = 300_000L;
     private static final int MAX_BOX_REELS = 18;
     private static final String BATCH_ID_CHARACTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final String[] REEL_BATCH_COUNT_OPTIONS = {
@@ -2367,9 +2367,15 @@ public class MainActivity extends Activity
         title.setPadding(0, dp(8), 0, dp(6));
         field.addView(title, matchWrap());
 
+        input.setSelectAllOnFocus(true);
+        input.setOnClickListener(view -> {
+            setActiveScanField(scanField);
+            selectInputForReplacement(input);
+        });
         input.setOnFocusChangeListener((view, hasFocus) -> {
             if (hasFocus) {
                 setActiveScanField(scanField);
+                selectInputForReplacement(input);
             }
         });
         field.addView(input, matchWrap());
@@ -3475,10 +3481,17 @@ public class MainActivity extends Activity
                 : roundStroke(Color.WHITE, Color.rgb(220, 224, 230), dp(9), 1));
     }
 
+    private void selectInputForReplacement(EditText input) {
+        if (input == null) {
+            return;
+        }
+        input.post(input::selectAll);
+    }
+
     private void focusActiveScanField() {
         if (activeScanField == ScanField.SWG && swgInput != null) {
             swgInput.requestFocus();
-            swgInput.selectAll();
+            selectInputForReplacement(swgInput);
         } else if (activeScanField == ScanField.COLOUR) {
             colourDropdown.requestFocus();
         } else if (activeScanField == ScanField.SPOOL_SIZE && spoolSizeDropdown != null) {
@@ -3489,13 +3502,13 @@ public class MainActivity extends Activity
             boxReelScanTarget.requestFocus();
         } else if (activeScanField == ScanField.TARE_WEIGHT && tareWeightInput != null) {
             tareWeightInput.requestFocus();
-            tareWeightInput.selectAll();
+            selectInputForReplacement(tareWeightInput);
         } else if (activeScanField == ScanField.GROSS_WEIGHT && grossWeightInput != null) {
             grossWeightInput.requestFocus();
-            grossWeightInput.selectAll();
+            selectInputForReplacement(grossWeightInput);
         } else if (activeScanField == ScanField.SPOOL_WEIGHT && spoolWeightInput != null) {
             spoolWeightInput.requestFocus();
-            spoolWeightInput.selectAll();
+            selectInputForReplacement(spoolWeightInput);
         } else if (generateQrButton != null) {
             generateQrButton.requestFocus();
         }
