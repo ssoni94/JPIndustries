@@ -102,6 +102,8 @@ public class MainActivity extends Activity
     private EditText grossWeightInput;
     private EditText netWeightInput;
     private EditText spoolWeightInput;
+    private EditText spoolEightToleranceInput;
+    private EditText spoolTenToleranceInput;
     private LabelSize selectedLabelSize = LabelSize.STANDARD_SIZES[0];
     private String selectedSwg = "";
     private String selectedColour = "";
@@ -111,6 +113,8 @@ public class MainActivity extends Activity
     private String grossWeight = "";
     private String netWeight = "";
     private String spoolWeight = "";
+    private String spoolEightTolerance = ".03";
+    private String spoolTenTolerance = ".04";
     private int selectedReelBatchCount = 1;
     private int printedReelsInBatch;
     private String activeReelBatchId = "";
@@ -453,6 +457,9 @@ public class MainActivity extends Activity
 
     private void buildSpoolQrScreen() {
         activeQrSection = "Spool QR";
+        labelTextInput = null;
+        labelSizeDropdown = null;
+        selectedLabelSize = LabelSize.SPOOL_1X2_INCH;
         LinearLayout shell = buildAppShell();
         ScrollView scrollView = new ScrollView(this);
         scrollView.setFillViewport(true);
@@ -470,74 +477,38 @@ public class MainActivity extends Activity
         card.setBackground(roundStroke(Color.WHITE, Color.rgb(225, 229, 235), dp(10), 1));
         content.addView(card, matchWrap());
 
-        TextView section = new TextView(this);
-        section.setText("SPOOL QR");
-        section.setTextSize(13);
-        section.setTypeface(Typeface.DEFAULT_BOLD);
-        section.setTextColor(Color.rgb(107, 114, 128));
-        card.addView(section, matchWrap());
-
-        TextView title = new TextView(this);
-        title.setText("Spool QR");
-        title.setTextSize(23);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
-        title.setTextColor(Color.rgb(17, 24, 39));
-        title.setPadding(0, dp(4), 0, dp(18));
-        card.addView(title, matchWrap());
-
-        labelTextInput = input("Label text", "JP Industries");
-        addLabeledView(card, "Label text", labelTextInput);
-
-        labelSizeDropdown = dropdownField();
-        labelSizeDropdown.setOnClickListener(view -> showDropdown(labelSizeDropdown, LabelSize.STANDARD_SIZES, value -> {
-            selectedLabelSize = value;
-            setDropdownText(labelSizeDropdown, value.toString());
-        }));
-        addLabeledView(card, "Label size", labelSizeDropdown);
+        LinearLayout spoolDetailRow = detailRow();
+        colourDropdown = addDropdownField(spoolDetailRow, "Colour", COLOUR_OPTIONS, ScanField.COLOUR, value -> selectColour(value, false));
+        setDropdownText(colourDropdown, selectedColour);
+        spoolSizeDropdown = addDropdownField(spoolDetailRow, "Spool Size", SPOOL_SIZE_OPTIONS, ScanField.SPOOL_SIZE, value -> selectSpoolSize(value, false));
+        setDropdownText(spoolSizeDropdown, selectedSpoolSize);
+        card.addView(spoolDetailRow, matchWrap());
 
         spoolWeightInput = input("Spool Wt.", spoolWeight);
-        spoolWeightInput.setInputType(InputType.TYPE_CLASS_NUMBER
-                | InputType.TYPE_NUMBER_FLAG_DECIMAL
-                | InputType.TYPE_NUMBER_FLAG_SIGNED);
-        spoolWeightInput.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence text, int start, int count, int after) {
-            }
-
-            @Override
-            public void onTextChanged(CharSequence text, int start, int before, int count) {
-                spoolWeight = text == null ? "" : text.toString().trim();
-                updateGenerateButtonState();
-            }
-
-            @Override
-            public void afterTextChanged(Editable editable) {
-            }
+        configureWeightInput(spoolWeightInput, ScanField.SPOOL_WEIGHT, value -> setSpoolWeight(value, true));
+        spoolWeightInput.setSelectAllOnFocus(true);
+        spoolWeightInput.setOnClickListener(view -> {
+            setActiveScanField(ScanField.SPOOL_WEIGHT);
+            selectInputForReplacement(spoolWeightInput);
         });
         spoolWeightInput.setOnFocusChangeListener((view, hasFocus) -> {
             if (hasFocus) {
                 setActiveScanField(ScanField.SPOOL_WEIGHT);
+                selectInputForReplacement(spoolWeightInput);
             }
-        });
-        spoolWeightInput.setOnEditorActionListener((view, actionId, event) -> {
-            setSpoolWeight(getSpoolWeightValue(), false);
-            if (!spoolWeight.isEmpty()) {
-                setActiveScanField(ScanField.DONE);
-            }
-            return false;
-        });
-        spoolWeightInput.setOnKeyListener((view, keyCode, event) -> {
-            if (event.getAction() == KeyEvent.ACTION_DOWN
-                    && (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER)) {
-                setSpoolWeight(getSpoolWeightValue(), false);
-                if (!spoolWeight.isEmpty()) {
-                    setActiveScanField(ScanField.DONE);
-                }
-                return true;
-            }
-            return false;
         });
         addLabeledView(card, "Spool Wt.", spoolWeightInput);
+
+        LinearLayout toleranceRow = detailRow();
+        spoolEightToleranceInput = input("8\" Tolerance", spoolEightTolerance);
+        configureToleranceInput(spoolEightToleranceInput, value -> spoolEightTolerance = value);
+        enableInputReplacementSelection(spoolEightToleranceInput);
+        addPlainInputField(toleranceRow, "8\" Tolerance", spoolEightToleranceInput);
+        spoolTenToleranceInput = input("10\" Tolerance", spoolTenTolerance);
+        configureToleranceInput(spoolTenToleranceInput, value -> spoolTenTolerance = value);
+        enableInputReplacementSelection(spoolTenToleranceInput);
+        addPlainInputField(toleranceRow, "10\" Tolerance", spoolTenToleranceInput);
+        card.addView(toleranceRow, matchWrap());
 
         LinearLayout actionRow = new LinearLayout(this);
         actionRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -565,7 +536,7 @@ public class MainActivity extends Activity
         shell.addView(scrollView, weightedMatch());
         shell.addView(bottomNavigation(), matchWrap());
         setContentView(shell);
-        setActiveScanField(ScanField.SPOOL_WEIGHT);
+        setActiveScanField(ScanField.COLOUR);
     }
 
     private void buildBoxQrScreen() {
@@ -1250,6 +1221,8 @@ public class MainActivity extends Activity
     private Bitmap createLabelPreviewBitmap(String qrData) {
         if ("Reel QR".equals(activeQrSection)) {
             return createReelLabelPreviewBitmap();
+        } else if ("Spool QR".equals(activeQrSection)) {
+            return createQrOnlyBitmap(qrData, 450, 900);
         }
         return createGenericLabelPreviewBitmap(
                 qrData,
@@ -1314,6 +1287,29 @@ public class MainActivity extends Activity
             float footerTextY = Math.max(detailTextY + paint.getTextSize() + 8, previewHeight - (38 * scale));
             canvas.drawText(footerText, textX, footerTextY, paint);
         }
+        return labelBitmap;
+    }
+
+    private Bitmap createSpoolQrOnlyPrintBitmap(String qrData) {
+        int width = TsplBitmapEncoder.dotsForMm(LabelSize.SPOOL_1X2_INCH.getWidthMm());
+        int height = TsplBitmapEncoder.dotsForMm(LabelSize.SPOOL_1X2_INCH.getHeightMm());
+        return createQrOnlyBitmap(qrData, width, height);
+    }
+
+    private Bitmap createQrOnlyBitmap(String qrData, int width, int height) {
+        Bitmap labelBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(labelBitmap);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(Color.WHITE);
+        paint.setStyle(Paint.Style.FILL);
+        canvas.drawRect(0, 0, width, height, paint);
+
+        int margin = Math.max(8, Math.min(width, height) / 10);
+        int qrSize = Math.max(1, Math.min(width, height) - (margin * 2));
+        int left = (width - qrSize) / 2;
+        int top = (height - qrSize) / 2;
+        Bitmap qrBitmap = QrCodeGenerator.create(qrData, 900);
+        canvas.drawBitmap(qrBitmap, null, new RectF(left, top, left + qrSize, top + qrSize), null);
         return labelBitmap;
     }
 
@@ -1720,13 +1716,13 @@ public class MainActivity extends Activity
         paint.setStyle(Paint.Style.FILL);
 
         drawFitPrintText(canvas, paint, "NET WT.", 38, 188, 250, 24, reelTypeface);
-        drawFitPrintText(canvas, paint, netWeight + "kg", 36, 250, 390, 60, reelTypeface);
+        drawFitPrintText(canvas, paint, formatReelLabelWeight(netWeight) + " kg", 36, 250, 390, 60, reelTypeface);
 
         Bitmap packedQr = QrCodeGenerator.create(createReelQrData(), 420);
         canvas.drawBitmap(packedQr, null, new RectF(450, 158, 566, 274), null);
 
-        drawFitPrintText(canvas, paint, "GROSS WT: " + grossWeight + "kg", 28, 322, 275, 22, reelTypeface);
-        drawFitPrintText(canvas, paint, "TARE WT: " + tareWeight + "kg", 28, 352, 275, 22, reelTypeface);
+        drawFitPrintText(canvas, paint, "GROSS WT: " + formatReelLabelWeight(grossWeight) + " kg", 28, 322, 275, 22, reelTypeface);
+        drawFitPrintText(canvas, paint, "TARE WT: " + formatReelLabelWeight(tareWeight) + " kg", 28, 352, 275, 22, reelTypeface);
         drawFitPrintText(canvas, paint, "SPOOL: " + selectedSpoolSize, 320, 322, 260, 22, reelTypeface);
         drawFitPrintText(canvas, paint, (isReelBatchMode() ? "BATCH: " : "ID: ") + getCurrentReelUniqueId(), 320, 352, 260, 20, reelTypeface);
         drawFitPrintText(canvas, paint, "PACKED BY: " + getEnteredByName(), 28, 388, 560, 20, reelTypeface);
@@ -2185,6 +2181,8 @@ public class MainActivity extends Activity
 
         if ("Reel QR".equals(activeQrSection)) {
             printBytes(TsplBitmapEncoder.buildBitmapLabel(createReelLabelPrintBitmap(), LabelSize.REEL_3X2_INCH));
+        } else if ("Spool QR".equals(activeQrSection)) {
+            printBytes(TsplBitmapEncoder.buildBitmapLabel(createSpoolQrOnlyPrintBitmap(createQrPayload()), LabelSize.SPOOL_1X2_INCH));
         } else if ("BOX QR".equals(activeQrSection)) {
             printBytes(buildBoxPrintBytes());
         } else {
@@ -2300,7 +2298,9 @@ public class MainActivity extends Activity
 
         boolean enabled;
         if ("Spool QR".equals(activeQrSection)) {
-            enabled = !getSpoolWeightValue().isEmpty();
+            enabled = !selectedColour.trim().isEmpty()
+                    && !selectedSpoolSize.trim().isEmpty()
+                    && !getSpoolWeightValue().isEmpty();
         } else if ("BOX QR".equals(activeQrSection)) {
             enabled = !selectedBrand.trim().isEmpty() && !boxReels.isEmpty();
         } else {
@@ -2383,6 +2383,37 @@ public class MainActivity extends Activity
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         params.setMargins(0, 0, dp(8), 0);
         row.addView(field, params);
+    }
+
+    private void addPlainInputField(LinearLayout row, String label, EditText input) {
+        LinearLayout field = new LinearLayout(this);
+        field.setOrientation(LinearLayout.VERTICAL);
+
+        TextView title = new TextView(this);
+        title.setText(label);
+        title.setTextSize(14);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setTextColor(Color.rgb(17, 24, 39));
+        title.setPadding(0, dp(8), 0, dp(6));
+        field.addView(title, matchWrap());
+        field.addView(input, matchWrap());
+
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        params.setMargins(0, 0, dp(8), 0);
+        row.addView(field, params);
+    }
+
+    private void enableInputReplacementSelection(EditText input) {
+        if (input == null) {
+            return;
+        }
+        input.setSelectAllOnFocus(true);
+        input.setOnClickListener(view -> selectInputForReplacement(input));
+        input.setOnFocusChangeListener((view, hasFocus) -> {
+            if (hasFocus) {
+                selectInputForReplacement(input);
+            }
+        });
     }
 
     private void clearTareWeightValue() {
@@ -2499,6 +2530,26 @@ public class MainActivity extends Activity
         });
     }
 
+    private void configureToleranceInput(EditText input, ScanValueSelected changed) {
+        input.setInputType(InputType.TYPE_CLASS_NUMBER
+                | InputType.TYPE_NUMBER_FLAG_DECIMAL
+                | InputType.TYPE_NUMBER_FLAG_SIGNED);
+        input.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence text, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence text, int start, int before, int count) {
+                changed.onSelected(text == null ? "" : text.toString().trim());
+            }
+
+            @Override
+            public void afterTextChanged(Editable editable) {
+            }
+        });
+    }
+
     private void processScannedValue(String scannedValue) {
         String value = scannedValue == null ? "" : scannedValue.trim();
         if (value.isEmpty()) {
@@ -2513,6 +2564,10 @@ public class MainActivity extends Activity
             selectSwg(value, true);
             return;
         } else if (activeScanField == ScanField.COLOUR) {
+            if ("Reel QR".equals(activeQrSection) && value.contains(",")) {
+                handleCombinedReelColourScan(value);
+                return;
+            }
             matched = matchAndSelect(value, COLOUR_OPTIONS, matchedValue -> selectColour(matchedValue, true));
         } else if (activeScanField == ScanField.SPOOL_SIZE) {
             matched = matchAndSelect(normalizeSpoolSize(value), SPOOL_SIZE_OPTIONS, matchedValue -> selectSpoolSize(matchedValue, true));
@@ -2526,6 +2581,10 @@ public class MainActivity extends Activity
             addBoxReel(value);
             return;
         } else if (activeScanField == ScanField.TARE_WEIGHT) {
+            if ("Reel QR".equals(activeQrSection) && value.contains(",")) {
+                handleCombinedReelColourScan(value);
+                return;
+            }
             setTareWeight(value, true);
             return;
         } else if (activeScanField == ScanField.GROSS_WEIGHT) {
@@ -2550,6 +2609,70 @@ public class MainActivity extends Activity
             }
         }
         return false;
+    }
+
+    private void handleCombinedReelColourScan(String scannedValue) {
+        String[] parts = scannedValue.split(",", -1);
+        if (parts.length < 3) {
+            Toast.makeText(this, "Scan Colour, Spool Size, Tare Wt.", Toast.LENGTH_SHORT).show();
+            setActiveScanField(ScanField.COLOUR);
+            return;
+        }
+
+        String colourValue = resolveColourOption(parts[0]);
+        String spoolSizeValue = resolveSpoolSizeOption(parts[1]);
+        String tareValue = normalizeWeightText(parts[2]);
+        if (colourValue.isEmpty()) {
+            Toast.makeText(this, "No match for colour", Toast.LENGTH_SHORT).show();
+            setActiveScanField(ScanField.COLOUR);
+            return;
+        }
+        if (spoolSizeValue.isEmpty()) {
+            Toast.makeText(this, "No match for Spool Size", Toast.LENGTH_SHORT).show();
+            setActiveScanField(ScanField.COLOUR);
+            return;
+        }
+        if (!isCompleteWeightText(tareValue)) {
+            Toast.makeText(this, "Scan complete Tare Wt.", Toast.LENGTH_SHORT).show();
+            setActiveScanField(ScanField.COLOUR);
+            return;
+        }
+
+        selectColour(colourValue, false);
+        selectSpoolSize(spoolSizeValue, false);
+        setTareWeight(tareValue, false);
+        setActiveScanField(ScanField.GROSS_WEIGHT);
+    }
+
+    private String resolveColourOption(String value) {
+        String colourValue = value == null ? "" : value.trim();
+        if (colourValue.isEmpty()) {
+            return "";
+        }
+        for (String option : COLOUR_OPTIONS) {
+            if (option != null && !option.trim().isEmpty() && option.equalsIgnoreCase(colourValue)) {
+                return option;
+            }
+        }
+        if (colourValue.length() == 1) {
+            for (String option : COLOUR_OPTIONS) {
+                if (option != null && !option.trim().isEmpty()
+                        && option.substring(0, 1).equalsIgnoreCase(colourValue)) {
+                    return option;
+                }
+            }
+        }
+        return "";
+    }
+
+    private String resolveSpoolSizeOption(String value) {
+        String spoolValue = normalizeSpoolSize(value);
+        for (String option : SPOOL_SIZE_OPTIONS) {
+            if (option != null && !option.trim().isEmpty() && option.equalsIgnoreCase(spoolValue)) {
+                return option;
+            }
+        }
+        return "";
     }
 
     private boolean isValidSwgScan(String value) {
@@ -2608,7 +2731,7 @@ public class MainActivity extends Activity
         setDropdownText(spoolSizeDropdown, selectedSpoolSize);
         updateGenerateButtonState();
         if (advance) {
-            setActiveScanField(ScanField.TARE_WEIGHT);
+            setActiveScanField("Spool QR".equals(activeQrSection) ? ScanField.SPOOL_WEIGHT : ScanField.TARE_WEIGHT);
         }
     }
 
@@ -3384,6 +3507,20 @@ public class MainActivity extends Activity
         return sign + whole + decimal;
     }
 
+    private String formatReelLabelWeight(String value) {
+        String weight = value == null ? "" : value.trim();
+        if (weight.startsWith(".")) {
+            return "0" + weight;
+        }
+        if (weight.startsWith("-.")) {
+            return "-0" + weight.substring(1);
+        }
+        if (weight.startsWith("+.")) {
+            return "0" + weight.substring(1);
+        }
+        return weight;
+    }
+
     private String trimWeight(double value) {
         if (Math.abs(value - Math.rint(value)) < 0.000001d) {
             return String.valueOf((long) Math.rint(value));
@@ -3394,7 +3531,17 @@ public class MainActivity extends Activity
     }
 
     private void setSpoolWeight(String value, boolean advance) {
-        spoolWeight = value == null ? "" : value.trim();
+        String spoolValue = normalizeWeightText(value);
+        if (advance && !isCompleteWeightText(spoolValue)) {
+            setSpoolWeight("", false);
+            updateGenerateButtonState();
+            Toast.makeText(this, "Scan complete Spool Wt.", Toast.LENGTH_SHORT).show();
+            if (spoolWeightInput != null) {
+                spoolWeightInput.requestFocus();
+            }
+            return;
+        }
+        spoolWeight = spoolValue;
         if (spoolWeightInput != null) {
             spoolWeightInput.setText(spoolWeight);
             spoolWeightInput.setSelection(spoolWeightInput.getText().length());
@@ -3407,12 +3554,41 @@ public class MainActivity extends Activity
 
     private void submitSpoolQr() {
         setSpoolWeight(getSpoolWeightValue(), false);
-        if (spoolWeight.isEmpty()) {
+        if (selectedColour.trim().isEmpty()) {
+            Toast.makeText(this, "Select Colour", Toast.LENGTH_SHORT).show();
+            setActiveScanField(ScanField.COLOUR);
+            return;
+        }
+        if (selectedSpoolSize.trim().isEmpty()) {
+            Toast.makeText(this, "Select Spool Size", Toast.LENGTH_SHORT).show();
+            setActiveScanField(ScanField.SPOOL_SIZE);
+            return;
+        }
+        if (spoolWeight.isEmpty() || !isCompleteWeightText(spoolWeight)) {
             Toast.makeText(this, "Enter Spool Wt.", Toast.LENGTH_SHORT).show();
             setActiveScanField(ScanField.SPOOL_WEIGHT);
             return;
         }
         showQrPreviewOverlay();
+    }
+
+    private void printSpoolFromScaleIfReady(String normalizedWeight) {
+        if (!"Spool QR".equals(activeQrSection) || generateQrButton == null || !generateQrButton.isEnabled()) {
+            return;
+        }
+        if (!normalizedWeight.equals(spoolWeight)) {
+            return;
+        }
+        if (selectedPrinter == null) {
+            Toast.makeText(this, "Select a printer first", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        printBytes(TsplBitmapEncoder.buildBitmapLabel(createSpoolQrOnlyPrintBitmap(createQrPayload()), LabelSize.SPOOL_1X2_INCH));
+        spoolWeight = "";
+        lastScalePreviewWeight = "";
+        lastScalePreviewAtMs = 0L;
+        buildSpoolQrScreen();
+        getWindow().getDecorView().post(() -> setActiveScanField(ScanField.SPOOL_WEIGHT));
     }
 
     private void clearSpoolWeight() {
@@ -3425,6 +3601,38 @@ public class MainActivity extends Activity
             return spoolWeight == null ? "" : spoolWeight.trim();
         }
         return spoolWeightInput.getText().toString().trim();
+    }
+
+    private String getAdjustedSpoolWeightValue() {
+        String weightValue = normalizeWeightText(getSpoolWeightValue());
+        Double weight = parseWeight(weightValue);
+        if (weight == null) {
+            return weightValue;
+        }
+
+        Double tolerance = null;
+        if ("8\"".equals(selectedSpoolSize)) {
+            tolerance = parseTolerance(spoolEightTolerance);
+        } else if ("10\"".equals(selectedSpoolSize)) {
+            tolerance = parseTolerance(spoolTenTolerance);
+        }
+        return tolerance == null ? weightValue : trimWeight(weight + tolerance);
+    }
+
+    private Double parseTolerance(String value) {
+        String tolerance = value == null ? "" : value.trim();
+        if (tolerance.startsWith(".")) {
+            tolerance = "0" + tolerance;
+        } else if (tolerance.startsWith("+.")) {
+            tolerance = "+0" + tolerance.substring(1);
+        } else if (tolerance.startsWith("-.")) {
+            tolerance = "-0" + tolerance.substring(1);
+        }
+        try {
+            return tolerance.isEmpty() ? null : Double.parseDouble(tolerance);
+        } catch (NumberFormatException exception) {
+            return null;
+        }
     }
 
     private void setActiveScanField(ScanField scanField) {
@@ -3516,7 +3724,7 @@ public class MainActivity extends Activity
 
     private String createQrPayload() {
         if ("Spool QR".equals(activeQrSection)) {
-            return getSpoolWeightValue();
+            return selectedColour + "," + selectedSpoolSize + "," + getAdjustedSpoolWeightValue();
         } else if ("Reel QR".equals(activeQrSection)) {
             return createReelQrData();
         } else if ("BOX QR".equals(activeQrSection)) {
@@ -3567,8 +3775,19 @@ public class MainActivity extends Activity
 
     private String createDetailText() {
         if ("Spool QR".equals(activeQrSection)) {
-            String value = getSpoolWeightValue();
-            return value.isEmpty() ? "" : "Spool Wt. " + value;
+            String value = getAdjustedSpoolWeightValue();
+            List<String> details = new ArrayList<>();
+            addDetail(details, selectedColour, selectedColour);
+            addDetail(details, "Spool Size " + selectedSpoolSize, selectedSpoolSize);
+            addDetail(details, "Spool Wt. " + value, value);
+            StringBuilder builder = new StringBuilder();
+            for (int index = 0; index < details.size(); index++) {
+                if (index > 0) {
+                    builder.append(" | ");
+                }
+                builder.append(details.get(index));
+            }
+            return builder.toString();
         } else if ("BOX QR".equals(activeQrSection)) {
             return selectedBrand.trim().isEmpty() ? "" : "Brand " + selectedBrand.trim();
         }
@@ -3873,7 +4092,12 @@ public class MainActivity extends Activity
         if ("Scale Test".equals(activeQrSection)) {
             appendScaleDiagnosticParsed(normalizedWeight);
         } else if ("Spool QR".equals(activeQrSection)) {
+            if (activeScanField != ScanField.SPOOL_WEIGHT) {
+                setScaleStatusText("Scale weight ignored until Spool Wt. is active");
+                return;
+            }
             setSpoolWeight(normalizedWeight, true);
+            inactivityHandler.postDelayed(() -> printSpoolFromScaleIfReady(normalizedWeight), SCALE_PRINT_DELAY_MS);
         } else if ("Reel QR".equals(activeQrSection)) {
             if (activeScanField != ScanField.GROSS_WEIGHT) {
                 setScaleStatusText("Scale weight ignored until Gross Wt. is active");

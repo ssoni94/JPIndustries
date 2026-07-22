@@ -1,6 +1,7 @@
 package com.jpindustries.qrlabel;
 
 public final class LabelSize {
+    public static final LabelSize SPOOL_1X2_INCH = new LabelSize("1 x 2 in", 25, 51);
     public static final LabelSize REEL_3X2_INCH = new LabelSize("3 x 2 in", 76, 51);
     public static final LabelSize BOX_4X4_INCH = new LabelSize("4 x 4 in", 102, 102);
     public static final LabelSize ROUND_4_INCH = BOX_4X4_INCH;
