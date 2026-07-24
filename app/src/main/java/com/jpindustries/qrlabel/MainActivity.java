@@ -289,11 +289,22 @@ public class MainActivity extends Activity
         if (event.getAction() != KeyEvent.ACTION_DOWN) {
             return super.dispatchKeyEvent(event);
         }
+        int keyCode = event.getKeyCode();
+        if (shouldCaptureReelScannerInput()) {
+            if (handleBufferedScannerKey(event, keyCode)) {
+                return true;
+            }
+            return super.dispatchKeyEvent(event);
+        }
+
         if (getCurrentFocus() instanceof EditText) {
             return super.dispatchKeyEvent(event);
         }
 
-        int keyCode = event.getKeyCode();
+        return handleBufferedScannerKey(event, keyCode);
+    }
+
+    private boolean handleBufferedScannerKey(KeyEvent event, int keyCode) {
         if (keyCode == KeyEvent.KEYCODE_ENTER
                 || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
                 || keyCode == KeyEvent.KEYCODE_TAB) {
@@ -326,7 +337,19 @@ public class MainActivity extends Activity
             scannerBuffer.append((char) unicodeChar);
             return true;
         }
-        return super.dispatchKeyEvent(event);
+        return false;
+    }
+
+    private boolean shouldCaptureReelScannerInput() {
+        if (!"Reel QR".equals(activeQrSection)) {
+            return false;
+        }
+        return activeScanField == ScanField.SWG
+                || activeScanField == ScanField.COLOUR
+                || activeScanField == ScanField.SPOOL_SIZE
+                || activeScanField == ScanField.TARE_WEIGHT
+                || activeScanField == ScanField.GROSS_WEIGHT
+                || activeScanField == ScanField.DONE;
     }
 
     @Override
@@ -2570,6 +2593,10 @@ public class MainActivity extends Activity
             }
             matched = matchAndSelect(value, COLOUR_OPTIONS, matchedValue -> selectColour(matchedValue, true));
         } else if (activeScanField == ScanField.SPOOL_SIZE) {
+            if ("Reel QR".equals(activeQrSection) && value.contains(",")) {
+                handleCombinedReelColourScan(value);
+                return;
+            }
             matched = matchAndSelect(normalizeSpoolSize(value), SPOOL_SIZE_OPTIONS, matchedValue -> selectSpoolSize(matchedValue, true));
         } else if (activeScanField == ScanField.BRAND) {
             matched = matchAndSelect(value, BRAND_OPTIONS, matchedValue -> selectBrand(matchedValue, true));
