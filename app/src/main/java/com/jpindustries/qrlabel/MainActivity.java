@@ -139,6 +139,9 @@ public class MainActivity extends Activity
     private TextView scaleDiagnosticParsedText;
     private TextView scaleDiagnosticCountText;
     private TextView scaleDiagnosticGapText;
+    private EditText scannerDiagnosticInput;
+    private TextView scannerDiagnosticLogText;
+    private TextView scannerDiagnosticStatusText;
     private String selectedScaleBaud = "9600";
     private String selectedScaleFormat = "8N1";
     private ScanField activeScanField = ScanField.SWG;
@@ -163,6 +166,8 @@ public class MainActivity extends Activity
     private final SecureRandom batchRandom = new SecureRandom();
     private final StringBuilder scannerBuffer = new StringBuilder();
     private final StringBuilder scaleDiagnosticLog = new StringBuilder();
+    private final StringBuilder scannerDiagnosticLog = new StringBuilder();
+    private final StringBuilder scannerDiagnosticBuffer = new StringBuilder();
     private final List<BluetoothDevice> visibleBluetoothPrinters = new ArrayList<>();
     private final List<UsbDevice> visibleUsbPrinters = new ArrayList<>();
     private final List<PrinterTarget> visiblePrinters = new ArrayList<>();
@@ -287,6 +292,13 @@ public class MainActivity extends Activity
             return true;
         }
         if (event.getAction() != KeyEvent.ACTION_DOWN) {
+            if ("Scanner Test".equals(activeQrSection)) {
+                logScannerDiagnosticKeyEvent(event);
+            }
+            return super.dispatchKeyEvent(event);
+        }
+        if ("Scanner Test".equals(activeQrSection)) {
+            logScannerDiagnosticKeyEvent(event);
             return super.dispatchKeyEvent(event);
         }
         int keyCode = event.getKeyCode();
@@ -323,8 +335,13 @@ public class MainActivity extends Activity
                 }
                 return super.dispatchKeyEvent(event);
             }
-            processScannedValue(scannerBuffer.toString());
+            String bufferedValue = scannerBuffer.toString();
             scannerBuffer.setLength(0);
+            if (activeScanField == ScanField.SWG && !hasScannerBufferValue(bufferedValue) && swgInput != null) {
+                selectSwg(swgInput.getText().toString(), true);
+                return true;
+            }
+            processScannedValue(bufferedValue);
             return true;
         }
 
@@ -338,6 +355,10 @@ public class MainActivity extends Activity
             return true;
         }
         return false;
+    }
+
+    private boolean hasScannerBufferValue(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     private boolean shouldCaptureReelScannerInput() {
@@ -433,12 +454,12 @@ public class MainActivity extends Activity
         swgInput = input("SWG", selectedSwg);
         configureSwgInput(swgInput);
         addInputField(firstDetailRow, "SWG", swgInput, ScanField.SWG);
-        colourDropdown = addDropdownField(firstDetailRow, "Colour", COLOUR_OPTIONS, ScanField.COLOUR, value -> selectColour(value, false));
+        colourDropdown = addDropdownField(firstDetailRow, "Colour", COLOUR_OPTIONS, ScanField.COLOUR, value -> selectColour(value, false), false);
         setDropdownText(colourDropdown, selectedColour);
         card.addView(firstDetailRow, matchWrap());
 
         LinearLayout secondDetailRow = detailRow();
-        spoolSizeDropdown = addDropdownField(secondDetailRow, "Spool Size", SPOOL_SIZE_OPTIONS, ScanField.SPOOL_SIZE, value -> selectSpoolSize(value, false));
+        spoolSizeDropdown = addDropdownField(secondDetailRow, "Spool Size", SPOOL_SIZE_OPTIONS, ScanField.SPOOL_SIZE, value -> selectSpoolSize(value, false), false);
         setDropdownText(spoolSizeDropdown, selectedSpoolSize);
         tareWeightInput = input("Tare Wt.", tareWeight);
         configureWeightInput(tareWeightInput, ScanField.TARE_WEIGHT, value -> setTareWeight(value, true));
@@ -692,6 +713,97 @@ public class MainActivity extends Activity
         setContentView(shell);
     }
 
+    private void buildScannerDiagnosticScreen() {
+        activeQrSection = "Scanner Test";
+        scannerBuffer.setLength(0);
+        scannerDiagnosticBuffer.setLength(0);
+        LinearLayout shell = buildAppShell();
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setFillViewport(true);
+
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(14), dp(18), dp(14), dp(18));
+        scrollView.addView(content, matchParentWrap());
+
+        addTopBar(content, "Scanner Diagnostic");
+
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(18), dp(18), dp(18), dp(18));
+        card.setBackground(roundStroke(Color.WHITE, Color.rgb(225, 229, 235), dp(10), 1));
+        content.addView(card, matchWrap());
+
+        TextView title = previewText("Scanner behavior test", 18, true);
+        card.addView(title, matchWrap());
+
+        scannerDiagnosticStatusText = deviceStatusText("Focus: - | Active: " + activeScanField.getLabel());
+        card.addView(scannerDiagnosticStatusText, spacedMatchWrap(dp(10)));
+
+        scannerDiagnosticInput = input("Scanner input test", "");
+        scannerDiagnosticInput.setSingleLine(false);
+        scannerDiagnosticInput.setMinLines(2);
+        scannerDiagnosticInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        scannerDiagnosticInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence text, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence text, int start, int before, int count) {
+                appendScannerDiagnosticLog(timestampText()
+                        + " TEXT   field=[" + safeDiagnosticText(text == null ? "" : text.toString()) + "]");
+            }
+
+            @Override
+            public void afterTextChanged(Editable editable) {
+            }
+        });
+        addLabeledView(card, "Visible text field", scannerDiagnosticInput);
+
+        LinearLayout firstRow = compactActionRow();
+        Button focusButton = compactButton("Focus Field");
+        focusButton.setOnClickListener(view -> {
+            scannerDiagnosticInput.requestFocus();
+            scannerDiagnosticInput.setSelection(scannerDiagnosticInput.getText().length());
+            updateScannerDiagnosticStatus();
+        });
+        Button clearFieldButton = compactButton("Clear Field");
+        clearFieldButton.setOnClickListener(view -> scannerDiagnosticInput.setText(""));
+        firstRow.addView(focusButton, compactActionParams(true));
+        firstRow.addView(clearFieldButton, compactActionParams(false));
+        card.addView(firstRow, spacedMatchWrap(dp(8)));
+
+        LinearLayout secondRow = compactActionRow();
+        Button clearLogButton = compactButton("Clear Log");
+        clearLogButton.setOnClickListener(view -> clearScannerDiagnosticLog());
+        Button bufferButton = compactButton("Clear Buffer");
+        bufferButton.setOnClickListener(view -> {
+            scannerDiagnosticBuffer.setLength(0);
+            appendScannerDiagnosticLog(timestampText() + " BUFFER cleared");
+            updateScannerDiagnosticStatus();
+        });
+        secondRow.addView(clearLogButton, compactActionParams(true));
+        secondRow.addView(bufferButton, compactActionParams(false));
+        card.addView(secondRow, spacedMatchWrap(dp(14)));
+
+        scannerDiagnosticLogText = previewText("", 12, false);
+        scannerDiagnosticLogText.setTypeface(Typeface.MONOSPACE);
+        scannerDiagnosticLogText.setTextColor(Color.rgb(17, 24, 39));
+        scannerDiagnosticLogText.setPadding(dp(12), dp(12), dp(12), dp(12));
+        scannerDiagnosticLogText.setMinHeight(dp(320));
+        scannerDiagnosticLogText.setBackground(roundStroke(Color.rgb(248, 250, 252), Color.rgb(220, 224, 230), dp(8), 1));
+        card.addView(scannerDiagnosticLogText, matchWrap());
+        refreshScannerDiagnosticLog();
+
+        addContentFiller(content);
+        shell.addView(scrollView, weightedMatch());
+        shell.addView(bottomNavigation(), matchWrap());
+        setContentView(shell);
+        scannerDiagnosticInput.requestFocus();
+        updateScannerDiagnosticStatus();
+    }
+
     private LinearLayout buildAppShell() {
         LinearLayout shell = new LinearLayout(this);
         shell.setOrientation(LinearLayout.VERTICAL);
@@ -833,6 +945,7 @@ public class MainActivity extends Activity
         nav.addView(bottomNavItem("Reel QR", "Reel", android.R.drawable.ic_menu_upload), navItemParams());
         nav.addView(bottomNavItem("BOX QR", "Box", android.R.drawable.ic_menu_view), navItemParams());
         nav.addView(bottomNavItem("Scale Test", "Scale", android.R.drawable.ic_menu_info_details), navItemParams());
+        nav.addView(bottomNavItem("Scanner Test", "Scan", android.R.drawable.ic_menu_search), navItemParams());
         return nav;
     }
 
@@ -872,6 +985,8 @@ public class MainActivity extends Activity
             buildBoxQrScreen();
         } else if ("Scale Test".equals(section)) {
             buildScaleDiagnosticScreen();
+        } else if ("Scanner Test".equals(section)) {
+            buildScannerDiagnosticScreen();
         } else {
             Toast.makeText(this, section + " screen is not added yet", Toast.LENGTH_SHORT).show();
         }
@@ -2115,6 +2230,118 @@ public class MainActivity extends Activity
         }
     }
 
+    private void logScannerDiagnosticKeyEvent(KeyEvent event) {
+        int keyCode = event.getKeyCode();
+        String action = event.getAction() == KeyEvent.ACTION_DOWN ? "DOWN" : "UP";
+        int unicodeChar = event.getUnicodeChar();
+        String charText = unicodeChar > 0 ? printableDiagnosticChar((char) unicodeChar) : "-";
+        if (event.getAction() == KeyEvent.ACTION_DOWN && unicodeChar > 0) {
+            scannerDiagnosticBuffer.append((char) unicodeChar);
+        }
+        appendScannerDiagnosticLog(timestampText()
+                + " KEY    " + action
+                + " " + KeyEvent.keyCodeToString(keyCode)
+                + " char=[" + charText + "]"
+                + " focus=[" + focusedViewName() + "]"
+                + " active=[" + activeScanField.getLabel() + "]");
+        if (event.getAction() == KeyEvent.ACTION_DOWN
+                && (keyCode == KeyEvent.KEYCODE_ENTER
+                || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+                || keyCode == KeyEvent.KEYCODE_TAB)) {
+            appendScannerDiagnosticLog(timestampText()
+                    + " FINAL  buffer=[" + safeDiagnosticText(scannerDiagnosticBuffer.toString()) + "]");
+            scannerDiagnosticBuffer.setLength(0);
+        }
+        updateScannerDiagnosticStatus();
+    }
+
+    private String focusedViewName() {
+        View focused = getCurrentFocus();
+        if (focused == null) {
+            return "-";
+        }
+        if (focused == swgInput) {
+            return "SWG";
+        } else if (focused == tareWeightInput) {
+            return "Tare Wt.";
+        } else if (focused == grossWeightInput) {
+            return "Gross Wt.";
+        } else if (focused == spoolWeightInput) {
+            return "Spool Wt.";
+        } else if (focused == scannerDiagnosticInput) {
+            return "Scanner Test Field";
+        } else if (focused == colourDropdown) {
+            return "Colour";
+        } else if (focused == spoolSizeDropdown) {
+            return "Spool Size";
+        } else if (focused == boxBrandDropdown) {
+            return "Brand";
+        } else if (focused == boxReelScanTarget) {
+            return "Box Reel QR";
+        }
+        return focused.getClass().getSimpleName();
+    }
+
+    private String printableDiagnosticChar(char value) {
+        if (value == '\n') {
+            return "\\n";
+        }
+        if (value == '\r') {
+            return "\\r";
+        }
+        if (value == '\t') {
+            return "\\t";
+        }
+        return Character.toString(value);
+    }
+
+    private String safeDiagnosticText(String value) {
+        String text = value == null ? "" : value;
+        return text.replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t");
+    }
+
+    private void appendScannerDiagnosticLog(String line) {
+        if (scannerDiagnosticLog.length() > 0) {
+            scannerDiagnosticLog.append('\n');
+        }
+        scannerDiagnosticLog.append(line);
+        trimScannerDiagnosticLog();
+        refreshScannerDiagnosticLog();
+    }
+
+    private void trimScannerDiagnosticLog() {
+        int maxLength = 16000;
+        if (scannerDiagnosticLog.length() <= maxLength) {
+            return;
+        }
+        scannerDiagnosticLog.delete(0, scannerDiagnosticLog.length() - maxLength);
+        int firstLineBreak = scannerDiagnosticLog.indexOf("\n");
+        if (firstLineBreak >= 0) {
+            scannerDiagnosticLog.delete(0, firstLineBreak + 1);
+        }
+    }
+
+    private void refreshScannerDiagnosticLog() {
+        if (scannerDiagnosticLogText != null) {
+            scannerDiagnosticLogText.setText(scannerDiagnosticLog.length() == 0 ? "No scanner data logged yet." : scannerDiagnosticLog.toString());
+        }
+    }
+
+    private void clearScannerDiagnosticLog() {
+        scannerDiagnosticLog.setLength(0);
+        scannerDiagnosticBuffer.setLength(0);
+        refreshScannerDiagnosticLog();
+        updateScannerDiagnosticStatus();
+    }
+
+    private void updateScannerDiagnosticStatus() {
+        if (scannerDiagnosticStatusText != null) {
+            scannerDiagnosticStatusText.setText("Focus: " + focusedViewName()
+                    + " | Active: " + activeScanField.getLabel()
+                    + " | Buffer: " + safeDiagnosticText(scannerDiagnosticBuffer.toString()));
+        }
+    }
+
     private String timestampText() {
         return new SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(new Date());
     }
@@ -2353,6 +2580,10 @@ public class MainActivity extends Activity
     }
 
     private TextView addDropdownField(LinearLayout row, String label, String[] values, ScanField scanField, OptionSelected<String> selected) {
+        return addDropdownField(row, label, values, scanField, selected, true);
+    }
+
+    private TextView addDropdownField(LinearLayout row, String label, String[] values, ScanField scanField, OptionSelected<String> selected, boolean openOnTap) {
         LinearLayout field = new LinearLayout(this);
         field.setOrientation(LinearLayout.VERTICAL);
         field.setPadding(0, 0, 0, 0);
@@ -2368,7 +2599,14 @@ public class MainActivity extends Activity
         TextView dropdown = dropdownField();
         dropdown.setOnClickListener(view -> {
             setActiveScanField(scanField);
+            if (openOnTap) {
+                showDropdown(dropdown, values, selected);
+            }
+        });
+        dropdown.setOnLongClickListener(view -> {
+            setActiveScanField(scanField);
             showDropdown(dropdown, values, selected);
+            return true;
         });
         field.addView(dropdown, matchWrap());
 
