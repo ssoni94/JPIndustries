@@ -94,7 +94,7 @@ public class MainActivity extends Activity
     private TextView reelBatchCountDropdown;
     private TextView reelBatchStatusText;
     private LinearLayout reelBatchList;
-    private TextView boxBrandDropdown;
+    private EditText boxBrandInput;
     private TextView boxReelScanTarget;
     private TextView boxReelCountText;
     private LinearLayout boxReelList;
@@ -153,6 +153,7 @@ public class MainActivity extends Activity
     private long scaleDiagnosticLastMessageAtMs;
     private String lastScalePreviewWeight = "";
     private long lastScalePreviewAtMs;
+    private Typeface reelLabelTypeface;
     private final Handler inactivityHandler = new Handler(Looper.getMainLooper());
     private final Runnable inactivityLogoutRunnable = () -> {
         if (authStore == null || !authStore.isLoggedIn()) {
@@ -611,13 +612,9 @@ public class MainActivity extends Activity
         }));
         addLabeledView(card, "Label size", labelSizeDropdown);
 
-        boxBrandDropdown = dropdownField();
-        setDropdownText(boxBrandDropdown, selectedBrand);
-        boxBrandDropdown.setOnClickListener(view -> {
-            setActiveScanField(ScanField.BRAND);
-            showDropdown(boxBrandDropdown, BRAND_OPTIONS, value -> selectBrand(value, true));
-        });
-        addLabeledView(card, "Brand", boxBrandDropdown);
+        boxBrandInput = input("Brand", selectedBrand);
+        configureBrandInput(boxBrandInput);
+        addLabeledView(card, "Brand", boxBrandInput);
 
         boxReelScanTarget = dropdownField();
         boxReelScanTarget.setText("Scan Reel QR");
@@ -1834,7 +1831,7 @@ public class MainActivity extends Activity
         canvas.drawRect(1, 1, width - 2, height - 2, paint);
         paint.setStyle(Paint.Style.FILL);
 
-        Typeface reelTypeface = Typeface.create("sans-serif-condensed", Typeface.BOLD);
+        Typeface reelTypeface = getReelLabelTypeface();
         drawCenteredPrintText(canvas, paint, "SUPER ENAMELLED COPPER WINDING WIRE", width / 2f, 28, 24, reelTypeface);
         paint.setStrokeWidth(2);
         canvas.drawLine(16, 43, width - 16, 43, paint);
@@ -1873,7 +1870,7 @@ public class MainActivity extends Activity
         Bitmap labelBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(labelBitmap);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        Typeface reelTypeface = Typeface.create("sans-serif-condensed", Typeface.BOLD);
+        Typeface reelTypeface = getReelLabelTypeface();
 
         paint.setColor(Color.WHITE);
         paint.setStyle(Paint.Style.FILL);
@@ -1900,6 +1897,18 @@ public class MainActivity extends Activity
         Bitmap batchQr = QrCodeGenerator.create(qrData, 420);
         canvas.drawBitmap(batchQr, null, new RectF(420, 115, 580, 275), null);
         return labelBitmap;
+    }
+
+    private Typeface getReelLabelTypeface() {
+        if (reelLabelTypeface != null) {
+            return reelLabelTypeface;
+        }
+        try {
+            reelLabelTypeface = Typeface.createFromAsset(getAssets(), "fonts/reel_label_bold.ttf");
+        } catch (RuntimeException exception) {
+            reelLabelTypeface = Typeface.create("sans-serif-condensed", Typeface.BOLD);
+        }
+        return reelLabelTypeface;
     }
 
     private void drawFitPrintText(Canvas canvas, Paint paint, String text, float x, float baseline, float maxWidth, float size, Typeface typeface) {
@@ -2274,7 +2283,7 @@ public class MainActivity extends Activity
             return "Colour";
         } else if (focused == spoolSizeDropdown) {
             return "Spool Size";
-        } else if (focused == boxBrandDropdown) {
+        } else if (focused == boxBrandInput) {
             return "Brand";
         } else if (focused == boxReelScanTarget) {
             return "Box Reel QR";
@@ -2747,6 +2756,51 @@ public class MainActivity extends Activity
         });
     }
 
+    private void configureBrandInput(EditText input) {
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
+        input.setSelectAllOnFocus(true);
+        input.setOnClickListener(view -> {
+            setActiveScanField(ScanField.BRAND);
+            selectInputForReplacement(input);
+        });
+        input.setOnFocusChangeListener((view, hasFocus) -> {
+            if (hasFocus) {
+                setActiveScanField(ScanField.BRAND);
+                selectInputForReplacement(input);
+            }
+        });
+        input.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence text, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence text, int start, int before, int count) {
+                selectedBrand = text == null ? "" : text.toString().trim();
+                updateGenerateButtonState();
+            }
+
+            @Override
+            public void afterTextChanged(Editable editable) {
+            }
+        });
+        input.setOnKeyListener((view, keyCode, event) -> {
+            if (event.getAction() == KeyEvent.ACTION_DOWN
+                    && (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+                selectBrand(input.getText().toString(), true);
+                return true;
+            }
+            return false;
+        });
+        input.setOnEditorActionListener((view, actionId, event) -> {
+            if (event != null && event.getAction() != KeyEvent.ACTION_DOWN) {
+                return false;
+            }
+            selectBrand(input.getText().toString(), true);
+            return false;
+        });
+    }
+
     private void configureWeightInput(EditText input, ScanField scanField, ScanValueSelected selected) {
         input.setInputType(InputType.TYPE_CLASS_NUMBER
                 | InputType.TYPE_NUMBER_FLAG_DECIMAL
@@ -3150,7 +3204,10 @@ public class MainActivity extends Activity
 
     private void selectBrand(String value, boolean advance) {
         selectedBrand = value == null ? "" : value.trim();
-        setDropdownText(boxBrandDropdown, selectedBrand);
+        if (boxBrandInput != null && !selectedBrand.equals(boxBrandInput.getText().toString())) {
+            boxBrandInput.setText(selectedBrand);
+            boxBrandInput.setSelection(boxBrandInput.getText().length());
+        }
         updateGenerateButtonState();
         if (advance) {
             setActiveScanField(ScanField.BOX_REEL);
@@ -3192,6 +3249,7 @@ public class MainActivity extends Activity
                 LabelSize.BOX_4X4_INCH
         ));
         Toast.makeText(this, "Box label sent to printer", Toast.LENGTH_SHORT).show();
+        setActiveScanField(ScanField.BOX_REEL);
     }
 
     private ReelScanItem parseReelScan(String qrValue) {
@@ -3910,6 +3968,7 @@ public class MainActivity extends Activity
 
     private boolean isDirectTextScanField(ScanField scanField) {
         return scanField == ScanField.SWG
+                || scanField == ScanField.BRAND
                 || scanField == ScanField.TARE_WEIGHT
                 || scanField == ScanField.GROSS_WEIGHT
                 || scanField == ScanField.SPOOL_WEIGHT;
@@ -3929,7 +3988,7 @@ public class MainActivity extends Activity
         setInputActive(swgInput, activeScanField == ScanField.SWG);
         setDropdownActive(colourDropdown, activeScanField == ScanField.COLOUR);
         setDropdownActive(spoolSizeDropdown, activeScanField == ScanField.SPOOL_SIZE);
-        setDropdownActive(boxBrandDropdown, activeScanField == ScanField.BRAND);
+        setInputActive(boxBrandInput, activeScanField == ScanField.BRAND);
         setDropdownActive(boxReelScanTarget, activeScanField == ScanField.BOX_REEL);
         setInputActive(tareWeightInput, activeScanField == ScanField.TARE_WEIGHT);
         setInputActive(grossWeightInput, activeScanField == ScanField.GROSS_WEIGHT);
@@ -3969,8 +4028,9 @@ public class MainActivity extends Activity
             colourDropdown.requestFocus();
         } else if (activeScanField == ScanField.SPOOL_SIZE && spoolSizeDropdown != null) {
             spoolSizeDropdown.requestFocus();
-        } else if (activeScanField == ScanField.BRAND && boxBrandDropdown != null) {
-            boxBrandDropdown.requestFocus();
+        } else if (activeScanField == ScanField.BRAND && boxBrandInput != null) {
+            boxBrandInput.requestFocus();
+            selectInputForReplacement(boxBrandInput);
         } else if (activeScanField == ScanField.BOX_REEL && boxReelScanTarget != null) {
             boxReelScanTarget.requestFocus();
         } else if (activeScanField == ScanField.TARE_WEIGHT && tareWeightInput != null) {
