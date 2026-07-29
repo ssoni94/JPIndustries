@@ -57,7 +57,7 @@ public class MainActivity extends Activity
     private static final int BLUETOOTH_PERMISSION_REQUEST = 1001;
     private static final long SCALE_PREVIEW_DEBOUNCE_MS = 2500L;
     private static final long SCALE_PRINT_DELAY_MS = 300L;
-    private static final long INACTIVITY_LOGOUT_MS = 90_000L;
+    private static final long INACTIVITY_LOGOUT_MS = 300_000L;
     private static final int MAX_BOX_REELS = 18;
     private static final String BATCH_ID_CHARACTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final String[] REEL_BATCH_COUNT_OPTIONS = {
@@ -74,7 +74,7 @@ public class MainActivity extends Activity
             "", "Black", "Green", "Off white", "White"
     };
     private static final String[] SPOOL_SIZE_OPTIONS = {
-            "", "2\"", "4\"", "6\"", "8\""
+            "", "2\"", "4\"", "6\"", "8\"", "10\""
     };
     private static final String[] BRAND_OPTIONS = {
             "", "Treveni", "JIPRO", "Indica", "JPI"
@@ -275,6 +275,12 @@ public class MainActivity extends Activity
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             resetInactivityTimer();
+        }
+        if (event.getAction() == KeyEvent.ACTION_UP
+                && (event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                || event.getKeyCode() == KeyEvent.KEYCODE_NUMPAD_ENTER
+                || event.getKeyCode() == KeyEvent.KEYCODE_TAB)) {
+            return true;
         }
         if (event.getAction() != KeyEvent.ACTION_DOWN) {
             return super.dispatchKeyEvent(event);
@@ -2255,11 +2261,7 @@ public class MainActivity extends Activity
         lastScalePreviewWeight = "";
         lastScalePreviewAtMs = 0L;
         buildScreen();
-        getWindow().getDecorView().post(() -> {
-            if (tareWeightInput != null) {
-                tareWeightInput.requestFocus();
-            }
-        });
+        getWindow().getDecorView().post(() -> setActiveScanField(ScanField.TARE_WEIGHT));
     }
 
     private void requestBluetoothPermissions() {
@@ -2365,9 +2367,15 @@ public class MainActivity extends Activity
         title.setPadding(0, dp(8), 0, dp(6));
         field.addView(title, matchWrap());
 
+        input.setSelectAllOnFocus(true);
+        input.setOnClickListener(view -> {
+            setActiveScanField(scanField);
+            selectInputForReplacement(input);
+        });
         input.setOnFocusChangeListener((view, hasFocus) -> {
             if (hasFocus) {
                 setActiveScanField(scanField);
+                selectInputForReplacement(input);
             }
         });
         field.addView(input, matchWrap());
@@ -2439,6 +2447,9 @@ public class MainActivity extends Activity
             return false;
         });
         input.setOnEditorActionListener((view, actionId, event) -> {
+            if (event != null && event.getAction() != KeyEvent.ACTION_DOWN) {
+                return false;
+            }
             selectSwg(input.getText().toString(), true);
             return false;
         });
@@ -2480,6 +2491,9 @@ public class MainActivity extends Activity
             return false;
         });
         input.setOnEditorActionListener((view, actionId, event) -> {
+            if (event != null && event.getAction() != KeyEvent.ACTION_DOWN) {
+                return false;
+            }
             selected.onSelected(input.getText().toString().trim());
             return true;
         });
@@ -3467,10 +3481,17 @@ public class MainActivity extends Activity
                 : roundStroke(Color.WHITE, Color.rgb(220, 224, 230), dp(9), 1));
     }
 
+    private void selectInputForReplacement(EditText input) {
+        if (input == null) {
+            return;
+        }
+        input.post(input::selectAll);
+    }
+
     private void focusActiveScanField() {
         if (activeScanField == ScanField.SWG && swgInput != null) {
             swgInput.requestFocus();
-            swgInput.selectAll();
+            selectInputForReplacement(swgInput);
         } else if (activeScanField == ScanField.COLOUR) {
             colourDropdown.requestFocus();
         } else if (activeScanField == ScanField.SPOOL_SIZE && spoolSizeDropdown != null) {
@@ -3481,13 +3502,13 @@ public class MainActivity extends Activity
             boxReelScanTarget.requestFocus();
         } else if (activeScanField == ScanField.TARE_WEIGHT && tareWeightInput != null) {
             tareWeightInput.requestFocus();
-            tareWeightInput.selectAll();
+            selectInputForReplacement(tareWeightInput);
         } else if (activeScanField == ScanField.GROSS_WEIGHT && grossWeightInput != null) {
             grossWeightInput.requestFocus();
-            grossWeightInput.selectAll();
+            selectInputForReplacement(grossWeightInput);
         } else if (activeScanField == ScanField.SPOOL_WEIGHT && spoolWeightInput != null) {
             spoolWeightInput.requestFocus();
-            spoolWeightInput.selectAll();
+            selectInputForReplacement(spoolWeightInput);
         } else if (generateQrButton != null) {
             generateQrButton.requestFocus();
         }
@@ -3854,7 +3875,7 @@ public class MainActivity extends Activity
         } else if ("Spool QR".equals(activeQrSection)) {
             setSpoolWeight(normalizedWeight, true);
         } else if ("Reel QR".equals(activeQrSection)) {
-            if (getCurrentFocus() != grossWeightInput) {
+            if (activeScanField != ScanField.GROSS_WEIGHT) {
                 setScaleStatusText("Scale weight ignored until Gross Wt. is active");
                 return;
             }

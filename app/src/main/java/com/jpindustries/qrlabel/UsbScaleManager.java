@@ -228,13 +228,20 @@ public final class UsbScaleManager implements SerialInputOutputManager.Listener 
             serialBuffer.delete(0, serialBuffer.length() - 160);
         }
 
-        int lastLineBreak = serialBuffer.lastIndexOf("\n");
-        if (lastLineBreak < 0) {
+        String bufferedText = serialBuffer.toString();
+        String lowerBufferedText = bufferedText.toLowerCase(Locale.US);
+        int frameEnd = lowerBufferedText.lastIndexOf("kg");
+        int endOffset = 2;
+        if (frameEnd < 0) {
+            frameEnd = serialBuffer.lastIndexOf("\n");
+            endOffset = 1;
+        }
+        if (frameEnd < 0) {
             return "";
         }
 
-        String completeFrame = serialBuffer.substring(0, lastLineBreak + 1);
-        serialBuffer.delete(0, lastLineBreak + 1);
+        String completeFrame = serialBuffer.substring(0, frameEnd + endOffset);
+        serialBuffer.delete(0, frameEnd + endOffset);
 
         String latestWeight = "";
         Matcher matcher = NUMBER_PATTERN.matcher(completeFrame);
