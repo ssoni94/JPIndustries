@@ -94,7 +94,7 @@ public class MainActivity extends Activity
     private TextView reelBatchCountDropdown;
     private TextView reelBatchStatusText;
     private LinearLayout reelBatchList;
-    private TextView boxBrandDropdown;
+    private EditText boxBrandInput;
     private TextView boxReelScanTarget;
     private TextView boxReelCountText;
     private LinearLayout boxReelList;
@@ -146,6 +146,7 @@ public class MainActivity extends Activity
     private long scaleDiagnosticLastMessageAtMs;
     private String lastScalePreviewWeight = "";
     private long lastScalePreviewAtMs;
+    private Typeface labelTypeface;
     private final Handler inactivityHandler = new Handler(Looper.getMainLooper());
     private final Runnable inactivityLogoutRunnable = () -> {
         if (authStore == null || !authStore.isLoggedIn()) {
@@ -596,13 +597,9 @@ public class MainActivity extends Activity
         }));
         addLabeledView(card, "Label size", labelSizeDropdown);
 
-        boxBrandDropdown = dropdownField();
-        setDropdownText(boxBrandDropdown, selectedBrand);
-        boxBrandDropdown.setOnClickListener(view -> {
-            setActiveScanField(ScanField.BRAND);
-            showDropdown(boxBrandDropdown, BRAND_OPTIONS, value -> selectBrand(value, true));
-        });
-        addLabeledView(card, "Brand", boxBrandDropdown);
+        boxBrandInput = input("Brand", selectedBrand);
+        configureBrandInput(boxBrandInput);
+        addLabeledView(card, "Brand", boxBrandInput);
 
         boxReelScanTarget = dropdownField();
         boxReelScanTarget.setText("Scan Reel QR");
@@ -1340,7 +1337,7 @@ public class MainActivity extends Activity
         Bitmap labelBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(labelBitmap);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        Typeface boxTypeface = Typeface.create("sans-serif-condensed", Typeface.BOLD);
+        Typeface boxTypeface = getLabelTypeface();
         float scale = width / 720f;
 
         paint.setColor(Color.WHITE);
@@ -1395,7 +1392,7 @@ public class MainActivity extends Activity
         Bitmap labelBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(labelBitmap);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        Typeface boxTypeface = Typeface.create("sans-serif", Typeface.BOLD);
+        Typeface boxTypeface = getLabelTypeface();
         float scale = width / 720f;
 
         paint.setColor(Color.WHITE);
@@ -1441,7 +1438,7 @@ public class MainActivity extends Activity
         Bitmap labelBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(labelBitmap);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        Typeface boxTypeface = Typeface.create("sans-serif-condensed", Typeface.BOLD);
+        Typeface boxTypeface = getLabelTypeface();
         float scale = width / 720f;
 
         paint.setColor(Color.WHITE);
@@ -1487,7 +1484,7 @@ public class MainActivity extends Activity
         Bitmap labelBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(labelBitmap);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        Typeface boxTypeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD);
+        Typeface boxTypeface = getLabelTypeface();
         float scale = width / 720f;
 
         paint.setColor(Color.WHITE);
@@ -1546,7 +1543,7 @@ public class MainActivity extends Activity
         Bitmap labelBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(labelBitmap);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        Typeface boxTypeface = Typeface.create("sans-serif-condensed", Typeface.BOLD);
+        Typeface boxTypeface = getLabelTypeface();
         float scale = width / 720f;
 
         paint.setColor(Color.WHITE);
@@ -1558,42 +1555,48 @@ public class MainActivity extends Activity
         canvas.drawRoundRect(new RectF(scaled(18, scale), scaled(18, scale), width - scaled(18, scale), height - scaled(18, scale)), scaled(16, scale), scaled(16, scale), paint);
         paint.setStyle(Paint.Style.FILL);
 
-        drawCenteredPrintText(canvas, paint, selectedBrand.trim().isEmpty() ? "JPI" : selectedBrand.trim(), width / 2f, scaled(60, scale), scaled(34, scale), boxTypeface);
-        drawCenteredPrintText(canvas, paint, "SUPER ENAMELLED COPPER WINDING WIRE", width / 2f, scaled(90, scale), scaled(16, scale), boxTypeface);
+        drawCenteredPrintText(canvas, paint, selectedBrand.trim().isEmpty() ? "JPI" : selectedBrand.trim(), width / 2f, scaled(66, scale), scaled(50, scale), boxTypeface);
+        drawCenteredPrintText(canvas, paint, "SUPER ENAMELLED COPPER WINDING WIRE", width / 2f, scaled(98, scale), scaled(18, scale), boxTypeface);
         paint.setStrokeWidth(3);
-        canvas.drawLine(scaled(42, scale), scaled(118, scale), width - scaled(42, scale), scaled(118, scale), paint);
+        canvas.drawLine(scaled(44, scale), scaled(122, scale), width - scaled(44, scale), scaled(122, scale), paint);
 
-        drawLabelCell(canvas, paint, "SWG", 42, 138, 154, 70, scale, boxTypeface, 22);
-        drawValueCell(canvas, paint, displayValue(reel.swg), 196, 138, 142, 70, scale, boxTypeface, 34);
-        drawLabelCell(canvas, paint, "SPOOL COLOR", 338, 138, 170, 70, scale, boxTypeface, 18);
-        drawValueCell(canvas, paint, boxColourName(reel.colour), 508, 138, 170, 70, scale, boxTypeface, 22);
+        drawFitPrintText(canvas, paint, "SINGLE REEL BOX", scaled(54, scale), scaled(158, scale), scaled(300, scale), scaled(19, scale), boxTypeface);
+        drawFitPrintText(canvas, paint, "ID: " + displayValue(reel.uniqueId), scaled(500, scale), scaled(158, scale), scaled(160, scale), scaled(20, scale), boxTypeface);
 
-        drawLabelCell(canvas, paint, "TESTED BY", 42, 208, 154, 56, scale, boxTypeface, 18);
-        drawValueCell(canvas, paint, getEnteredByName(), 196, 208, 142, 56, scale, boxTypeface, 18);
-        drawLabelCell(canvas, paint, "PACKED BY", 338, 208, 170, 56, scale, boxTypeface, 18);
-        drawValueCell(canvas, paint, displayValue(reel.packedBy), 508, 208, 170, 56, scale, boxTypeface, 18);
+        drawBoxInfoTile(canvas, paint, "SWG", displayValue(reel.swg), 54, 178, 176, 112, scale, boxTypeface);
+        drawBoxInfoTile(canvas, paint, "SPOOL", displayValue(reel.spoolSize), 250, 178, 136, 112, scale, boxTypeface);
+        drawBoxInfoTile(canvas, paint, "COLOUR", boxColourName(reel.colour), 406, 178, 132, 112, scale, boxTypeface);
+        drawBoxInfoTile(canvas, paint, "MAT.", "Cu", 558, 178, 92, 112, scale, boxTypeface);
 
-        drawLabelCell(canvas, paint, "SPOOL SIZE", 42, 264, 154, 56, scale, boxTypeface, 18);
-        drawValueCell(canvas, paint, displayValue(reel.spoolSize), 196, 264, 142, 56, scale, boxTypeface, 20);
-        drawLabelCell(canvas, paint, "MATERIAL", 338, 264, 170, 56, scale, boxTypeface, 18);
-        drawValueCell(canvas, paint, "Cu", 508, 264, 170, 56, scale, boxTypeface, 20);
+        paint.setColor(Color.WHITE);
+        paint.setStyle(Paint.Style.FILL);
+        canvas.drawRoundRect(new RectF(scaled(54, scale), scaled(318, scale), scaled(666, scale), scaled(504, scale)), scaled(16, scale), scaled(16, scale), paint);
+        paint.setColor(Color.BLACK);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(scaled(5, scale));
+        canvas.drawRoundRect(new RectF(scaled(54, scale), scaled(318, scale), scaled(666, scale), scaled(504, scale)), scaled(16, scale), scaled(16, scale), paint);
+        paint.setStyle(Paint.Style.FILL);
+        drawFitPrintText(canvas, paint, "NET WT.", scaled(82, scale), scaled(370, scale), scaled(240, scale), scaled(34, scale), boxTypeface);
+        drawFitPrintText(canvas, paint, displayValue(reel.netWeight) + " kg", scaled(78, scale), scaled(468, scale), scaled(560, scale), scaled(92, scale), boxTypeface);
 
-        drawLabelCell(canvas, paint, "NET WT.", 42, 336, 210, 80, scale, boxTypeface, 30);
-        drawValueCell(canvas, paint, displayValue(reel.netWeight) + "kg", 252, 336, 426, 80, scale, boxTypeface, 46);
-
-        drawLabelCell(canvas, paint, "BATCH", 42, 430, 150, 48, scale, boxTypeface, 17);
-        drawValueCell(canvas, paint, displayValue(reel.uniqueId), 192, 430, 188, 48, scale, boxTypeface, 18);
-        drawLabelCell(canvas, paint, "TARE NO.", 42, 478, 150, 48, scale, boxTypeface, 17);
-        drawValueCell(canvas, paint, "-", 192, 478, 188, 48, scale, boxTypeface, 18);
-        drawLabelCell(canvas, paint, "CLASS", 42, 526, 150, 48, scale, boxTypeface, 17);
-        drawValueCell(canvas, paint, "-", 192, 526, 188, 48, scale, boxTypeface, 18);
-        drawLabelCell(canvas, paint, "CUST PO", 42, 574, 150, 48, scale, boxTypeface, 17);
-        drawValueCell(canvas, paint, "-", 192, 574, 188, 48, scale, boxTypeface, 18);
+        paint.setColor(Color.BLACK);
+        paint.setStrokeWidth(scaled(2, scale));
+        canvas.drawLine(scaled(54, scale), scaled(526, scale), scaled(396, scale), scaled(526, scale), paint);
+        drawFitPrintText(canvas, paint, "TESTED BY", scaled(54, scale), scaled(554, scale), scaled(130, scale), scaled(18, scale), boxTypeface);
+        drawFitPrintText(canvas, paint, getEnteredByName(), scaled(202, scale), scaled(554, scale), scaled(190, scale), scaled(20, scale), boxTypeface);
+        canvas.drawLine(scaled(54, scale), scaled(574, scale), scaled(396, scale), scaled(574, scale), paint);
+        drawFitPrintText(canvas, paint, "PACKED BY", scaled(54, scale), scaled(602, scale), scaled(130, scale), scaled(18, scale), boxTypeface);
+        drawFitPrintText(canvas, paint, displayValue(reel.packedBy), scaled(202, scale), scaled(602, scale), scaled(190, scale), scaled(20, scale), boxTypeface);
+        canvas.drawLine(scaled(54, scale), scaled(622, scale), scaled(396, scale), scaled(622, scale), paint);
+        drawFitPrintText(canvas, paint, "BATCH: " + displayValue(reel.uniqueId), scaled(54, scale), scaled(646, scale), scaled(140, scale), scaled(17, scale), boxTypeface);
+        drawFitPrintText(canvas, paint, "TARE NO.: -", scaled(202, scale), scaled(646, scale), scaled(120, scale), scaled(17, scale), boxTypeface);
+        drawFitPrintText(canvas, paint, "CLASS: -", scaled(330, scale), scaled(646, scale), scaled(90, scale), scaled(17, scale), boxTypeface);
+        drawFitPrintText(canvas, paint, "CUST PO: -", scaled(54, scale), scaled(674, scale), scaled(150, scale), scaled(16, scale), boxTypeface);
 
         Bitmap qrBitmap = QrCodeGenerator.create(qrData, 700);
-        canvas.drawBitmap(qrBitmap, null, new RectF(scaled(434, scale), scaled(438, scale), scaled(636, scale), scaled(640, scale)), null);
+        canvas.drawBitmap(qrBitmap, null, new RectF(scaled(472, scale), scaled(514, scale), scaled(614, scale), scaled(656, scale)), null);
 
-        drawCenteredPrintText(canvas, paint, "MFG. OF ALL KIND OF COPPER WINDING WIRE", width / 2f, scaled(680, scale), scaled(20, scale), boxTypeface);
+        drawCenteredPrintText(canvas, paint, "MFG. OF ALL KIND OF COPPER WINDING WIRE", width / 2f, scaled(692, scale), scaled(17, scale), boxTypeface);
         return labelBitmap;
     }
 
@@ -1700,7 +1703,7 @@ public class MainActivity extends Activity
         canvas.drawRect(1, 1, width - 2, height - 2, paint);
         paint.setStyle(Paint.Style.FILL);
 
-        Typeface reelTypeface = Typeface.create("sans-serif-condensed", Typeface.BOLD);
+        Typeface reelTypeface = getLabelTypeface();
         drawCenteredPrintText(canvas, paint, "SUPER ENAMELLED COPPER WINDING WIRE", width / 2f, 28, 24, reelTypeface);
         paint.setStrokeWidth(2);
         canvas.drawLine(16, 43, width - 16, 43, paint);
@@ -1725,11 +1728,11 @@ public class MainActivity extends Activity
         Bitmap packedQr = QrCodeGenerator.create(createReelQrData(), 420);
         canvas.drawBitmap(packedQr, null, new RectF(450, 158, 566, 274), null);
 
-        drawFitPrintText(canvas, paint, "GROSS WT: " + grossWeight + "kg", 28, 322, 275, 22, reelTypeface);
-        drawFitPrintText(canvas, paint, "TARE WT: " + tareWeight + "kg", 28, 352, 275, 22, reelTypeface);
-        drawFitPrintText(canvas, paint, "SPOOL: " + selectedSpoolSize, 320, 322, 260, 22, reelTypeface);
-        drawFitPrintText(canvas, paint, (isReelBatchMode() ? "BATCH: " : "ID: ") + getCurrentReelUniqueId(), 320, 352, 260, 20, reelTypeface);
-        drawFitPrintText(canvas, paint, "PACKED BY: " + getEnteredByName(), 28, 388, 560, 20, reelTypeface);
+        drawFitPrintText(canvas, paint, "GROSS WT: " + grossWeight + "kg", 28, 328, 345, 32, reelTypeface);
+        drawFitPrintText(canvas, paint, "TARE WT: " + tareWeight + "kg", 28, 366, 345, 32, reelTypeface);
+        drawFitPrintText(canvas, paint, "SPOOL: " + selectedSpoolSize, 388, 322, 190, 20, reelTypeface);
+        drawFitPrintText(canvas, paint, (isReelBatchMode() ? "BATCH: " : "ID: ") + getCurrentReelUniqueId(), 388, 352, 190, 18, reelTypeface);
+        drawFitPrintText(canvas, paint, "PACKED BY: " + getEnteredByName(), 388, 382, 190, 18, reelTypeface);
         return labelBitmap;
     }
 
@@ -1739,7 +1742,7 @@ public class MainActivity extends Activity
         Bitmap labelBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(labelBitmap);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        Typeface reelTypeface = Typeface.create("sans-serif-condensed", Typeface.BOLD);
+        Typeface reelTypeface = getLabelTypeface();
 
         paint.setColor(Color.WHITE);
         paint.setStyle(Paint.Style.FILL);
@@ -1768,6 +1771,18 @@ public class MainActivity extends Activity
         return labelBitmap;
     }
 
+    private Typeface getLabelTypeface() {
+        if (labelTypeface != null) {
+            return labelTypeface;
+        }
+        try {
+            labelTypeface = Typeface.createFromAsset(getAssets(), "fonts/reel_label_bold.ttf");
+        } catch (RuntimeException exception) {
+            labelTypeface = Typeface.create("sans-serif-condensed", Typeface.BOLD);
+        }
+        return labelTypeface;
+    }
+
     private void drawFitPrintText(Canvas canvas, Paint paint, String text, float x, float baseline, float maxWidth, float size, Typeface typeface) {
         paint.setColor(Color.BLACK);
         paint.setAntiAlias(true);
@@ -1789,7 +1804,7 @@ public class MainActivity extends Activity
     private void drawBoxLogoHeader(Canvas canvas, Paint paint, float scale) {
         Bitmap logo = BitmapFactory.decodeResource(getResources(), R.drawable.jpi_logo_header);
         if (logo == null) {
-            Typeface fallbackTypeface = Typeface.create("sans-serif-condensed", Typeface.BOLD);
+            Typeface fallbackTypeface = getLabelTypeface();
             drawCenteredPrintText(canvas, paint, "JPI", scaled(360, scale), scaled(66, scale), scaled(40, scale), fallbackTypeface);
             drawCenteredPrintText(canvas, paint, "SUPER ENAMELLED COPPER WINDING WIRE", scaled(360, scale), scaled(96, scale), scaled(17, scale), fallbackTypeface);
             return;
@@ -2455,6 +2470,51 @@ public class MainActivity extends Activity
         });
     }
 
+    private void configureBrandInput(EditText input) {
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
+        input.setSelectAllOnFocus(true);
+        input.setOnClickListener(view -> {
+            setActiveScanField(ScanField.BRAND);
+            selectInputForReplacement(input);
+        });
+        input.setOnFocusChangeListener((view, hasFocus) -> {
+            if (hasFocus) {
+                setActiveScanField(ScanField.BRAND);
+                selectInputForReplacement(input);
+            }
+        });
+        input.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence text, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence text, int start, int before, int count) {
+                selectedBrand = text == null ? "" : text.toString().trim();
+                updateGenerateButtonState();
+            }
+
+            @Override
+            public void afterTextChanged(Editable editable) {
+            }
+        });
+        input.setOnKeyListener((view, keyCode, event) -> {
+            if (event.getAction() == KeyEvent.ACTION_DOWN
+                    && (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+                selectBrand(input.getText().toString(), true);
+                return true;
+            }
+            return false;
+        });
+        input.setOnEditorActionListener((view, actionId, event) -> {
+            if (event != null && event.getAction() != KeyEvent.ACTION_DOWN) {
+                return false;
+            }
+            selectBrand(input.getText().toString(), true);
+            return false;
+        });
+    }
+
     private void configureWeightInput(EditText input, ScanField scanField, ScanValueSelected selected) {
         input.setInputType(InputType.TYPE_CLASS_NUMBER
                 | InputType.TYPE_NUMBER_FLAG_DECIMAL
@@ -2762,7 +2822,10 @@ public class MainActivity extends Activity
 
     private void selectBrand(String value, boolean advance) {
         selectedBrand = value == null ? "" : value.trim();
-        setDropdownText(boxBrandDropdown, selectedBrand);
+        if (boxBrandInput != null && !selectedBrand.equals(boxBrandInput.getText().toString())) {
+            boxBrandInput.setText(selectedBrand);
+            boxBrandInput.setSelection(boxBrandInput.getText().length());
+        }
         updateGenerateButtonState();
         if (advance) {
             setActiveScanField(ScanField.BOX_REEL);
@@ -3437,6 +3500,7 @@ public class MainActivity extends Activity
 
     private boolean isDirectTextScanField(ScanField scanField) {
         return scanField == ScanField.SWG
+                || scanField == ScanField.BRAND
                 || scanField == ScanField.TARE_WEIGHT
                 || scanField == ScanField.GROSS_WEIGHT
                 || scanField == ScanField.SPOOL_WEIGHT;
@@ -3456,7 +3520,7 @@ public class MainActivity extends Activity
         setInputActive(swgInput, activeScanField == ScanField.SWG);
         setDropdownActive(colourDropdown, activeScanField == ScanField.COLOUR);
         setDropdownActive(spoolSizeDropdown, activeScanField == ScanField.SPOOL_SIZE);
-        setDropdownActive(boxBrandDropdown, activeScanField == ScanField.BRAND);
+        setInputActive(boxBrandInput, activeScanField == ScanField.BRAND);
         setDropdownActive(boxReelScanTarget, activeScanField == ScanField.BOX_REEL);
         setInputActive(tareWeightInput, activeScanField == ScanField.TARE_WEIGHT);
         setInputActive(grossWeightInput, activeScanField == ScanField.GROSS_WEIGHT);
@@ -3496,8 +3560,9 @@ public class MainActivity extends Activity
             colourDropdown.requestFocus();
         } else if (activeScanField == ScanField.SPOOL_SIZE && spoolSizeDropdown != null) {
             spoolSizeDropdown.requestFocus();
-        } else if (activeScanField == ScanField.BRAND && boxBrandDropdown != null) {
-            boxBrandDropdown.requestFocus();
+        } else if (activeScanField == ScanField.BRAND && boxBrandInput != null) {
+            boxBrandInput.requestFocus();
+            selectInputForReplacement(boxBrandInput);
         } else if (activeScanField == ScanField.BOX_REEL && boxReelScanTarget != null) {
             boxReelScanTarget.requestFocus();
         } else if (activeScanField == ScanField.TARE_WEIGHT && tareWeightInput != null) {
