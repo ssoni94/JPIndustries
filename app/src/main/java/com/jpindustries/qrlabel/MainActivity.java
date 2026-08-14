@@ -2279,6 +2279,20 @@ public class MainActivity extends Activity
         getWindow().getDecorView().post(() -> setActiveScanField(ScanField.TARE_WEIGHT));
     }
 
+    private void resetBatchReelForNextGrossWeight() {
+        if (!"Reel QR".equals(activeQrSection)) {
+            return;
+        }
+        grossWeight = "";
+        netWeight = "";
+        lastScalePreviewWeight = "";
+        lastScalePreviewAtMs = 0L;
+        clearGrossWeightValue();
+        clearNetWeightValue();
+        updateGenerateButtonState();
+        getWindow().getDecorView().post(() -> setActiveScanField(ScanField.GROSS_WEIGHT));
+    }
+
     private void requestBluetoothPermissions() {
         if (hasNeededBluetoothPermissions()) {
             return;
@@ -2589,8 +2603,7 @@ public class MainActivity extends Activity
             setTareWeight(value, true);
             return;
         } else if (activeScanField == ScanField.GROSS_WEIGHT) {
-            Toast.makeText(this, "Gross Wt. is received from weighing scale", Toast.LENGTH_SHORT).show();
-            focusActiveScanField();
+            setGrossWeight(value, true);
             return;
         } else {
             matched = false;
@@ -3335,9 +3348,11 @@ public class MainActivity extends Activity
             Toast.makeText(this, "Batch completed: " + completedBatchId, Toast.LENGTH_LONG).show();
             rememberCompletedReelBatch(completedBatchId, totalNetWeight, completedCount);
             resetCompletedReelBatch();
+            resetReelForNextScanIfNeeded();
+            return;
         }
 
-        resetReelForNextScanIfNeeded();
+        resetBatchReelForNextGrossWeight();
     }
 
     private String getReelBatchTotalNetWeight() {
