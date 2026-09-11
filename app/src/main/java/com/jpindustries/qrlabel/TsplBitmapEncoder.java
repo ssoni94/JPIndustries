@@ -30,6 +30,22 @@ public final class TsplBitmapEncoder {
         return output.toByteArray();
     }
 
+    public static byte[] buildContinuousBitmap(Bitmap bitmap, int widthMm, int copies) {
+        int widthBytes = (bitmap.getWidth() + 7) / 8;
+        int heightDots = bitmap.getHeight();
+        int heightMm = Math.max(1, (int) Math.ceil(heightDots / (double) DOTS_PER_MM));
+        int printCopies = Math.max(1, copies);
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        writeAscii(output, "SIZE " + widthMm + " mm," + heightMm + " mm\r\n");
+        writeAscii(output, "GAP 0 mm,0\r\n");
+        writeAscii(output, "DIRECTION 1\r\n");
+        writeAscii(output, "CLS\r\n");
+        writeAscii(output, "BITMAP 0,0," + widthBytes + "," + heightDots + ",0,");
+        output.writeBytes(toMonoRaster(bitmap, widthBytes));
+        writeAscii(output, "\r\nPRINT " + printCopies + "\r\n");
+        return output.toByteArray();
+    }
+
     private static byte[] toMonoRaster(Bitmap bitmap, int widthBytes) {
         int width = bitmap.getWidth();
         int height = bitmap.getHeight();

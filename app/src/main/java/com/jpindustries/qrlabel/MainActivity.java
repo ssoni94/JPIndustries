@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.bluetooth.BluetoothDevice;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -59,6 +60,28 @@ public class MainActivity extends Activity
     private static final long SCALE_PRINT_DELAY_MS = 300L;
     private static final long INACTIVITY_LOGOUT_MS = 300_000L;
     private static final int MAX_BOX_REELS = 18;
+    private static final int MAX_PACKING_LIST_SERIAL = 50;
+    private static final int PACKING_LIST_WIDTH_MM = 100;
+    private static final int PACKING_LIST_HEIGHT_MM = 180;
+    private static final int PACKING_LIST_COPIES = 2;
+    private static final int PACKING_LIST_LANE_COUNT = 4;
+    private static final int PACKING_LIST_TOP_Y = 116;
+    private static final int PACKING_LIST_FOOTER_TOP_Y = 1160;
+    private static final int PACKING_LIST_SEGMENT_GAP = 20;
+    private static final int PACKING_LIST_LANE_GAP = 16;
+    private static final int PACKING_LIST_HEADER_BASELINE_OFFSET = 48;
+    private static final int PACKING_LIST_HEADER_LINE_OFFSET = 66;
+    private static final int PACKING_LIST_FIRST_ENTRY_OFFSET = 116;
+    private static final int PACKING_LIST_CONTINUED_FIRST_ENTRY_OFFSET = 64;
+    private static final int PACKING_LIST_ENTRY_LINE_HEIGHT = 52;
+    private static final int PACKING_LIST_ENTRY_TO_TOTAL_LINE_GAP = 16;
+    private static final int PACKING_LIST_TOTAL_LINE_TO_TEXT_GAP = 30;
+    private static final int PACKING_LIST_GROUP_PRICE_LINE_HEIGHT = 30;
+    private static final int PACKING_LIST_SEGMENT_BOTTOM_PADDING = 12;
+    private static final int PACKING_LIST_OPEN_SEGMENT_BOTTOM_PADDING = 10;
+    private static final String APP_PREFS_NAME = "jp_industries_app";
+    private static final String KEY_PACKING_LIST_SERIAL = "packing_list_serial";
+    private static final String KEY_BASE_PRICE = "base_price";
     private static final String BATCH_ID_CHARACTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final String[] REEL_BATCH_COUNT_OPTIONS = {
             "1", "2", "4", "8", "16", "18"
@@ -85,6 +108,47 @@ public class MainActivity extends Activity
     private static final String[] SCALE_FORMAT_OPTIONS = {
             "8N1", "7E1", "7O1", "8E1", "8O1", "8N2"
     };
+    private static final String[][] DEFAULT_RATE_CONFIG = {
+            {"8", "16"},
+            {"9", "12"},
+            {"10", "9"},
+            {"11", "6"},
+            {"12", "4"},
+            {"13", "3"},
+            {"14", "2"},
+            {"15", "1"},
+            {"16", "0"},
+            {"17", "0"},
+            {"17.5", "0"},
+            {"18", "0"},
+            {"18.5", "0"},
+            {"19", "0"},
+            {"19.5", "0"},
+            {"20", "0"},
+            {"20.5", "1"},
+            {"21", "1"},
+            {"21.5", "2"},
+            {"22", "2"},
+            {"22.5", "3"},
+            {"23", "3"},
+            {"24", "4"},
+            {"25", "5"},
+            {"26", "6"},
+            {"36P", "28"},
+            {"35P", "27"},
+            {"34P", "26"},
+            {"33P", "25.5"},
+            {"32P", "25"},
+            {"31P", "24.5"},
+            {"30P", "24"},
+            {"29P", "23.5"},
+            {"28P", "23"},
+            {"27P", "22.5"},
+            {"W/R", "6"},
+            {"O/W", "2"},
+            {"G/R", "1"},
+            {"CCR", "10"}
+    };
 
     private EditText labelTextInput;
     private TextView labelSizeDropdown;
@@ -98,6 +162,9 @@ public class MainActivity extends Activity
     private TextView boxReelScanTarget;
     private TextView boxReelCountText;
     private LinearLayout boxReelList;
+    private TextView packingListScanTarget;
+    private TextView packingListCountText;
+    private LinearLayout packingListGroups;
     private EditText tareWeightInput;
     private EditText grossWeightInput;
     private EditText netWeightInput;
@@ -131,22 +198,15 @@ public class MainActivity extends Activity
     private TextView scaleStatus;
     private TextView scaleBaudDropdown;
     private TextView scaleFormatDropdown;
-    private TextView scaleDiagnosticLogText;
-    private TextView scaleDiagnosticParsedText;
-    private TextView scaleDiagnosticCountText;
-    private TextView scaleDiagnosticGapText;
     private String selectedScaleBaud = "9600";
     private String selectedScaleFormat = "8N1";
     private ScanField activeScanField = ScanField.SWG;
     private boolean qrPreviewShowing;
     private boolean updatingSwgInput;
-    private boolean scaleDiagnosticRunning;
-    private int scaleDiagnosticRawCount;
-    private int scaleDiagnosticParsedCount;
-    private long scaleDiagnosticLastMessageAtMs;
     private String lastScalePreviewWeight = "";
     private long lastScalePreviewAtMs;
     private Typeface labelTypeface;
+    private Typeface labelRegularTypeface;
     private final Handler inactivityHandler = new Handler(Looper.getMainLooper());
     private final Runnable inactivityLogoutRunnable = () -> {
         if (authStore == null || !authStore.isLoggedIn()) {
@@ -159,11 +219,11 @@ public class MainActivity extends Activity
     };
     private final SecureRandom batchRandom = new SecureRandom();
     private final StringBuilder scannerBuffer = new StringBuilder();
-    private final StringBuilder scaleDiagnosticLog = new StringBuilder();
     private final List<BluetoothDevice> visibleBluetoothPrinters = new ArrayList<>();
     private final List<UsbDevice> visibleUsbPrinters = new ArrayList<>();
     private final List<PrinterTarget> visiblePrinters = new ArrayList<>();
     private final List<ReelScanItem> boxReels = new ArrayList<>();
+    private final List<PackingListItem> packingListItems = new ArrayList<>();
     private final List<String> reelBatchNetWeights = new ArrayList<>();
     private final List<BatchReelItem> reelBatchItems = new ArrayList<>();
     private final List<BatchReelItem> lastCompletedReelBatchItems = new ArrayList<>();
@@ -628,8 +688,8 @@ public class MainActivity extends Activity
         setActiveScanField(ScanField.BRAND);
     }
 
-    private void buildScaleDiagnosticScreen() {
-        activeQrSection = "Scale Test";
+    private void buildPackingListScreen() {
+        activeQrSection = "Packing List";
         LinearLayout shell = buildAppShell();
         ScrollView scrollView = new ScrollView(this);
         scrollView.setFillViewport(true);
@@ -639,7 +699,7 @@ public class MainActivity extends Activity
         content.setPadding(dp(14), dp(18), dp(14), dp(18));
         scrollView.addView(content, matchParentWrap());
 
-        addTopBar(content, "Scale Diagnostic");
+        addTopBar(content, "Packing List");
 
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -647,52 +707,210 @@ public class MainActivity extends Activity
         card.setBackground(roundStroke(Color.WHITE, Color.rgb(225, 229, 235), dp(10), 1));
         content.addView(card, matchWrap());
 
-        TextView title = previewText("Scale behavior test", 18, true);
-        card.addView(title, matchWrap());
+        packingListScanTarget = dropdownField();
+        packingListScanTarget.setText("Scan Box QR");
+        packingListScanTarget.setCompoundDrawablesWithIntrinsicBounds(0, 0, android.R.drawable.ic_menu_camera, 0);
+        packingListScanTarget.setOnClickListener(view -> setActiveScanField(ScanField.PACKING_BOX));
+        addLabeledView(card, "Box QR Scanner", packingListScanTarget);
 
-        scaleStatus = deviceStatusText("Scale: Not connected");
-        card.addView(scaleStatus, spacedMatchWrap(dp(10)));
+        packingListCountText = previewText("", 14, true);
+        packingListCountText.setPadding(0, dp(14), 0, dp(8));
+        card.addView(packingListCountText, matchWrap());
 
-        scaleDiagnosticParsedText = deviceStatusText("Last parsed: -");
-        card.addView(scaleDiagnosticParsedText, spacedMatchWrap(dp(6)));
+        packingListGroups = new LinearLayout(this);
+        packingListGroups.setOrientation(LinearLayout.VERTICAL);
+        card.addView(packingListGroups, matchWrap());
+        refreshPackingListView();
 
-        scaleDiagnosticCountText = deviceStatusText("RAW: 0 | PARSED: 0");
-        card.addView(scaleDiagnosticCountText, spacedMatchWrap(dp(6)));
+        LinearLayout actionRow = new LinearLayout(this);
+        actionRow.setOrientation(LinearLayout.HORIZONTAL);
+        actionRow.setPadding(0, dp(14), 0, 0);
 
-        scaleDiagnosticGapText = deviceStatusText("Gap: -");
-        card.addView(scaleDiagnosticGapText, spacedMatchWrap(dp(12)));
+        Button clearButton = secondaryButton("Clear List");
+        clearButton.setOnClickListener(view -> clearPackingList());
+        Button printListButton = primaryButton("Print List", true);
+        printListButton.setOnClickListener(view -> showPackingListPreviewOverlay());
+        LinearLayout.LayoutParams clearParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        clearParams.setMargins(0, 0, dp(8), 0);
+        LinearLayout.LayoutParams printParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        printParams.setMargins(dp(8), 0, 0, 0);
+        actionRow.addView(clearButton, clearParams);
+        actionRow.addView(printListButton, printParams);
+        card.addView(actionRow, matchWrap());
 
-        LinearLayout firstRow = compactActionRow();
-        Button connectButton = compactButton("Connect Scale");
-        connectButton.setOnClickListener(view -> connectUsbScale());
-        Button startButton = compactButton("Start Test");
-        startButton.setOnClickListener(view -> startScaleDiagnosticTest());
-        firstRow.addView(connectButton, compactActionParams(true));
-        firstRow.addView(startButton, compactActionParams(false));
-        card.addView(firstRow, spacedMatchWrap(dp(8)));
-
-        LinearLayout secondRow = compactActionRow();
-        Button stopButton = compactButton("Stop Test");
-        stopButton.setOnClickListener(view -> stopScaleDiagnosticTest());
-        Button clearButton = compactButton("Clear Log");
-        clearButton.setOnClickListener(view -> clearScaleDiagnosticLog());
-        secondRow.addView(stopButton, compactActionParams(true));
-        secondRow.addView(clearButton, compactActionParams(false));
-        card.addView(secondRow, spacedMatchWrap(dp(14)));
-
-        scaleDiagnosticLogText = previewText("", 12, false);
-        scaleDiagnosticLogText.setTypeface(Typeface.MONOSPACE);
-        scaleDiagnosticLogText.setTextColor(Color.rgb(17, 24, 39));
-        scaleDiagnosticLogText.setPadding(dp(12), dp(12), dp(12), dp(12));
-        scaleDiagnosticLogText.setMinHeight(dp(260));
-        scaleDiagnosticLogText.setBackground(roundStroke(Color.rgb(248, 250, 252), Color.rgb(220, 224, 230), dp(8), 1));
-        card.addView(scaleDiagnosticLogText, matchWrap());
-        refreshScaleDiagnosticLog();
+        addDevicePanel(content, false);
 
         addContentFiller(content);
         shell.addView(scrollView, weightedMatch());
         shell.addView(bottomNavigation(), matchWrap());
         setContentView(shell);
+        setActiveScanField(ScanField.PACKING_BOX);
+    }
+
+    private void buildConfigurationScreen() {
+        activeQrSection = "Configuration";
+        LinearLayout shell = buildAppShell();
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setFillViewport(true);
+        scrollView.setBackgroundColor(Color.rgb(244, 247, 251));
+
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(14), dp(18), dp(14), dp(18));
+        scrollView.addView(content, matchParentWrap());
+
+        addTopBar(content, "Configuration");
+
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(16), dp(16), dp(16), dp(16));
+        card.setBackground(roundStroke(Color.WHITE, Color.rgb(225, 229, 235), dp(10), 1));
+        content.addView(card, matchWrap());
+
+        TextView heading = previewText("Configuration", 20, true);
+        heading.setTextColor(Color.rgb(17, 24, 39));
+        card.addView(heading, matchWrap());
+
+        addBasePriceField(card);
+        addRateConfigurationTable(card);
+
+        addContentFiller(content);
+        shell.addView(scrollView, weightedMatch());
+        shell.addView(bottomNavigation(), matchWrap());
+        setContentView(shell);
+    }
+
+    private void addBasePriceField(LinearLayout parent) {
+        EditText basePriceInput = input("Base price", getBasePriceValue());
+        basePriceInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL | InputType.TYPE_NUMBER_FLAG_SIGNED);
+        basePriceInput.setSelectAllOnFocus(true);
+        basePriceInput.setOnFocusChangeListener((view, hasFocus) -> {
+            if (!hasFocus) {
+                saveBasePriceValue(((EditText) view).getText().toString().trim());
+            }
+        });
+        addLabeledView(parent, "Base price", basePriceInput);
+    }
+
+    private void addRateConfigurationTable(LinearLayout parent) {
+        addConfigurationSection(parent, "Sizes", false);
+        addConfigurationSection(parent, "Colours", true);
+    }
+
+    private void addConfigurationSection(LinearLayout parent, String title, boolean colourSection) {
+        LinearLayout section = new LinearLayout(this);
+        section.setOrientation(LinearLayout.VERTICAL);
+        parent.addView(section, spacedMatchWrap(dp(12)));
+
+        TextView header = previewText("- " + title, 16, true);
+        header.setTextColor(Color.rgb(17, 24, 39));
+        header.setPadding(dp(12), dp(12), dp(12), dp(12));
+        header.setBackground(roundStroke(Color.rgb(248, 250, 252), Color.rgb(203, 213, 225), dp(8), 1));
+        section.addView(header, matchWrap());
+
+        LinearLayout rows = new LinearLayout(this);
+        rows.setOrientation(LinearLayout.VERTICAL);
+        rows.setPadding(0, dp(8), 0, 0);
+        rows.setVisibility(View.GONE);
+        section.addView(rows, matchWrap());
+
+        LinearLayout columnHeader = new LinearLayout(this);
+        columnHeader.setOrientation(LinearLayout.HORIZONTAL);
+        TextView sizeHeader = configurationColumnHeaderText(colourSection ? "Colour" : "Size");
+        TextView rateHeader = configurationColumnHeaderText("Rate");
+        LinearLayout.LayoutParams sizeHeaderParams = new LinearLayout.LayoutParams(dp(92), ViewGroup.LayoutParams.WRAP_CONTENT);
+        sizeHeaderParams.setMargins(0, 0, dp(10), 0);
+        columnHeader.addView(sizeHeader, sizeHeaderParams);
+        columnHeader.addView(rateHeader, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        rows.addView(columnHeader, matchWrap());
+
+        for (String[] row : DEFAULT_RATE_CONFIG) {
+            if (isColourRateConfig(row[0]) == colourSection) {
+                rows.addView(configurationRateRow(row[0], row[1], colourSection), spacedMatchWrap(dp(6)));
+            }
+        }
+
+        header.setText("+ " + title);
+        header.setOnClickListener(view -> {
+            boolean show = rows.getVisibility() != View.VISIBLE;
+            rows.setVisibility(show ? View.VISIBLE : View.GONE);
+            header.setText((show ? "- " : "+ ") + title);
+        });
+    }
+
+    private TextView configurationColumnHeaderText(String text) {
+        TextView view = previewText(text, 12, true);
+        view.setTextColor(Color.rgb(75, 85, 99));
+        view.setPadding(dp(4), 0, 0, 0);
+        return view;
+    }
+
+    private LinearLayout configurationRateRow(String size, String defaultRate, boolean colourSection) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView sizeText = previewText(configurationDisplaySize(size, colourSection), 16, true);
+        sizeText.setPadding(dp(10), 0, dp(8), 0);
+        sizeText.setMinHeight(dp(50));
+        sizeText.setGravity(Gravity.CENTER_VERTICAL);
+        sizeText.setTextColor(Color.rgb(75, 85, 99));
+        sizeText.setBackground(roundStroke(Color.rgb(241, 245, 249), Color.rgb(203, 213, 225), dp(8), 1));
+
+        EditText rateInput = input("0", getConfiguredRateValue(size, defaultRate));
+        rateInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL | InputType.TYPE_NUMBER_FLAG_SIGNED);
+        rateInput.setSelectAllOnFocus(true);
+        rateInput.setOnFocusChangeListener((view, hasFocus) -> {
+            if (!hasFocus) {
+                saveConfiguredRateValue(size, ((EditText) view).getText().toString().trim());
+            }
+        });
+
+        LinearLayout.LayoutParams sizeParams = new LinearLayout.LayoutParams(dp(92), ViewGroup.LayoutParams.WRAP_CONTENT);
+        sizeParams.setMargins(0, 0, dp(10), 0);
+        LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        row.addView(sizeText, sizeParams);
+        row.addView(rateInput, inputParams);
+        return row;
+    }
+
+    private boolean isColourRateConfig(String size) {
+        return "W/R".equals(size) || "O/W".equals(size) || "G/R".equals(size) || "CCR".equals(size);
+    }
+
+    private String configurationDisplaySize(String size, boolean colourSection) {
+        if (colourSection || size == null || size.trim().isEmpty() || size.toUpperCase(Locale.US).endsWith("P")) {
+            return size;
+        }
+        return size + "\"";
+    }
+
+    private String getConfiguredRateValue(String size, String defaultRate) {
+        return getSharedPreferences(APP_PREFS_NAME, MODE_PRIVATE)
+                .getString(rateConfigPreferenceKey(size), defaultRate);
+    }
+
+    private String getBasePriceValue() {
+        return getSharedPreferences(APP_PREFS_NAME, MODE_PRIVATE)
+                .getString(KEY_BASE_PRICE, "18");
+    }
+
+    private void saveBasePriceValue(String basePrice) {
+        getSharedPreferences(APP_PREFS_NAME, MODE_PRIVATE)
+                .edit()
+                .putString(KEY_BASE_PRICE, basePrice)
+                .apply();
+    }
+
+    private void saveConfiguredRateValue(String size, String rate) {
+        getSharedPreferences(APP_PREFS_NAME, MODE_PRIVATE)
+                .edit()
+                .putString(rateConfigPreferenceKey(size), rate)
+                .apply();
+    }
+
+    private String rateConfigPreferenceKey(String size) {
+        return "rate_config_" + size.replace("/", "_").replace(".", "_").replace("\"", "").toLowerCase(Locale.US);
     }
 
     private LinearLayout buildAppShell() {
@@ -835,7 +1053,7 @@ public class MainActivity extends Activity
         nav.addView(bottomNavItem("Spool QR", "Spool", android.R.drawable.ic_menu_manage), navItemParams());
         nav.addView(bottomNavItem("Reel QR", "Reel", android.R.drawable.ic_menu_upload), navItemParams());
         nav.addView(bottomNavItem("BOX QR", "Box", android.R.drawable.ic_menu_view), navItemParams());
-        nav.addView(bottomNavItem("Scale Test", "Scale", android.R.drawable.ic_menu_info_details), navItemParams());
+        nav.addView(bottomNavItem("Packing List", "List", android.R.drawable.ic_menu_agenda), navItemParams());
         return nav;
     }
 
@@ -873,8 +1091,10 @@ public class MainActivity extends Activity
             buildScreen();
         } else if ("BOX QR".equals(section)) {
             buildBoxQrScreen();
-        } else if ("Scale Test".equals(section)) {
-            buildScaleDiagnosticScreen();
+        } else if ("Packing List".equals(section)) {
+            buildPackingListScreen();
+        } else if ("Configuration".equals(section)) {
+            buildConfigurationScreen();
         } else {
             Toast.makeText(this, section + " screen is not added yet", Toast.LENGTH_SHORT).show();
         }
@@ -897,6 +1117,13 @@ public class MainActivity extends Activity
                 .setTitle("User Details")
                 .setView(content)
                 .create();
+
+        Button configurationButton = secondaryButton("Configuration");
+        content.addView(configurationButton, spacedMatchWrap(dp(8)));
+        configurationButton.setOnClickListener(view -> {
+            accountDialog.dismiss();
+            buildConfigurationScreen();
+        });
 
         Button signOutButton = primaryButton("Sign Out", true);
         content.addView(signOutButton, spacedMatchWrap(dp(8)));
@@ -1783,6 +2010,13 @@ public class MainActivity extends Activity
         return labelTypeface;
     }
 
+    private Typeface getLabelRegularTypeface() {
+        if (labelRegularTypeface == null) {
+            labelRegularTypeface = Typeface.create("sans-serif-condensed", Typeface.NORMAL);
+        }
+        return labelRegularTypeface;
+    }
+
     private void drawFitPrintText(Canvas canvas, Paint paint, String text, float x, float baseline, float maxWidth, float size, Typeface typeface) {
         paint.setColor(Color.BLACK);
         paint.setAntiAlias(true);
@@ -2025,94 +2259,6 @@ public class MainActivity extends Activity
         ScaleSerialFormat format = new ScaleSerialFormat(7, UsbSerialPort.PARITY_EVEN, UsbSerialPort.STOPBITS_1);
         setScaleStatusText("Searching for USB scale...");
         usbScaleManager.connectFirstScale(baudRate, format.dataBits, format.parity, format.stopBits);
-    }
-
-    private void startScaleDiagnosticTest() {
-        scaleDiagnosticRunning = true;
-        scaleDiagnosticRawCount = 0;
-        scaleDiagnosticParsedCount = 0;
-        scaleDiagnosticLastMessageAtMs = 0L;
-        scaleDiagnosticLog.setLength(0);
-        appendScaleDiagnosticLog("TEST STARTED");
-        updateScaleDiagnosticSummary("-", "");
-    }
-
-    private void stopScaleDiagnosticTest() {
-        scaleDiagnosticRunning = false;
-        appendScaleDiagnosticLog("TEST STOPPED");
-    }
-
-    private void clearScaleDiagnosticLog() {
-        scaleDiagnosticRawCount = 0;
-        scaleDiagnosticParsedCount = 0;
-        scaleDiagnosticLastMessageAtMs = 0L;
-        scaleDiagnosticLog.setLength(0);
-        updateScaleDiagnosticSummary("-", "");
-        refreshScaleDiagnosticLog();
-    }
-
-    private void appendScaleDiagnosticRaw(String data) {
-        if (!scaleDiagnosticRunning) {
-            return;
-        }
-        long now = android.os.SystemClock.elapsedRealtime();
-        String gapText = scaleDiagnosticLastMessageAtMs == 0L ? "-" : (now - scaleDiagnosticLastMessageAtMs) + " ms";
-        scaleDiagnosticLastMessageAtMs = now;
-        scaleDiagnosticRawCount++;
-        appendScaleDiagnosticLog(timestampText() + " RAW    [" + gapText + "] " + data);
-        updateScaleDiagnosticSummary(gapText, null);
-    }
-
-    private void appendScaleDiagnosticParsed(String weight) {
-        if (!scaleDiagnosticRunning) {
-            return;
-        }
-        scaleDiagnosticParsedCount++;
-        appendScaleDiagnosticLog(timestampText() + " PARSED " + weight);
-        updateScaleDiagnosticSummary(null, weight);
-    }
-
-    private void appendScaleDiagnosticLog(String line) {
-        if (scaleDiagnosticLog.length() > 0) {
-            scaleDiagnosticLog.append('\n');
-        }
-        scaleDiagnosticLog.append(line);
-        trimScaleDiagnosticLog();
-        refreshScaleDiagnosticLog();
-    }
-
-    private void trimScaleDiagnosticLog() {
-        int maxLength = 12000;
-        if (scaleDiagnosticLog.length() <= maxLength) {
-            return;
-        }
-        scaleDiagnosticLog.delete(0, scaleDiagnosticLog.length() - maxLength);
-        int firstLineBreak = scaleDiagnosticLog.indexOf("\n");
-        if (firstLineBreak >= 0) {
-            scaleDiagnosticLog.delete(0, firstLineBreak + 1);
-        }
-    }
-
-    private void refreshScaleDiagnosticLog() {
-        if (scaleDiagnosticLogText != null) {
-            scaleDiagnosticLogText.setText(scaleDiagnosticLog.length() == 0 ? "No scale data logged yet." : scaleDiagnosticLog.toString());
-        }
-    }
-
-    private void updateScaleDiagnosticSummary(String gapText, String parsedWeight) {
-        if (scaleDiagnosticCountText != null) {
-            scaleDiagnosticCountText.setText("RAW: " + scaleDiagnosticRawCount + " | PARSED: " + scaleDiagnosticParsedCount);
-        }
-        if (gapText != null && scaleDiagnosticGapText != null) {
-            scaleDiagnosticGapText.setText("Gap: " + gapText);
-        }
-        if (parsedWeight != null && scaleDiagnosticParsedText != null) {
-            scaleDiagnosticParsedText.setText(parsedWeight.isEmpty() ? "Last parsed: -" : "Last parsed: " + parsedWeight);
-        }
-    }
-
-    private String timestampText() {
-        return new SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(new Date());
     }
 
     private int parseScaleBaud() {
@@ -2599,6 +2745,9 @@ public class MainActivity extends Activity
         } else if (activeScanField == ScanField.BOX_REEL) {
             addBoxReel(value);
             return;
+        } else if (activeScanField == ScanField.PACKING_BOX) {
+            addPackingListBox(value);
+            return;
         } else if (activeScanField == ScanField.TARE_WEIGHT) {
             setTareWeight(value, true);
             return;
@@ -2880,6 +3029,745 @@ public class MainActivity extends Activity
                 LabelSize.BOX_4X4_INCH
         ));
         Toast.makeText(this, "Box label sent to printer", Toast.LENGTH_SHORT).show();
+    }
+
+    private void addPackingListBox(String qrValue) {
+        PackingListItem item = parsePackingListBoxScan(qrValue);
+        if (item == null) {
+            Toast.makeText(this, "Invalid Box QR", Toast.LENGTH_SHORT).show();
+            setActiveScanField(ScanField.PACKING_BOX);
+            return;
+        }
+        packingListItems.add(item);
+        refreshPackingListView();
+        setActiveScanField(ScanField.PACKING_BOX);
+    }
+
+    private PackingListItem parsePackingListBoxScan(String qrValue) {
+        String raw = qrValue == null ? "" : qrValue.trim();
+        String[] parts = raw.split(",");
+        if (parts.length < 3) {
+            return null;
+        }
+
+        SwgSpoolValue swgSpoolValue = parseSwgSpoolValue(parts[0]);
+        String colour = parts[1].trim();
+        String netWeightValue = normalizeWeightText(parts[2].trim().replace("kg", "").replace("KG", ""));
+        if (swgSpoolValue.swg.isEmpty()
+                || swgSpoolValue.spoolSize.isEmpty()
+                || parseWeight(netWeightValue) == null) {
+            return null;
+        }
+
+        String date = parts.length > 3 ? parts[3].trim() : "";
+        String time = parts.length > 4 ? parts[4].trim() : "";
+        return new PackingListItem(
+                swgSpoolValue.swg,
+                swgSpoolValue.spoolSize,
+                colour,
+                netWeightValue,
+                date,
+                time,
+                raw
+        );
+    }
+
+    private SwgSpoolValue parseSwgSpoolValue(String value) {
+        String combined = value == null ? "" : value.trim();
+        for (String option : SPOOL_SIZE_OPTIONS) {
+            String spoolOption = normalizeSpoolSize(option);
+            if (spoolOption.isEmpty()) {
+                continue;
+            }
+            String compactCombined = combined.replace(" ", "");
+            String compactSpool = spoolOption.replace(" ", "");
+            if (compactCombined.toUpperCase(Locale.US).endsWith(compactSpool.toUpperCase(Locale.US))) {
+                int swgLength = compactCombined.length() - compactSpool.length();
+                return new SwgSpoolValue(compactCombined.substring(0, Math.max(0, swgLength)).trim(), spoolOption);
+            }
+        }
+        return new SwgSpoolValue(combined, "");
+    }
+
+    private void refreshPackingListView() {
+        if (packingListCountText != null) {
+            packingListCountText.setText(packingListItems.isEmpty()
+                    ? "Scan Box QR codes to create the packing list"
+                    : packingListItems.size() + " box QR(s) scanned | Total Wt.: " + getPackingListTotalWeight() + " kg");
+        }
+        if (packingListGroups == null) {
+            return;
+        }
+
+        packingListGroups.removeAllViews();
+        if (packingListItems.isEmpty()) {
+            TextView emptyText = previewText("No box QR scanned yet", 14, false);
+            emptyText.setTextColor(Color.rgb(107, 114, 128));
+            emptyText.setGravity(Gravity.CENTER);
+            emptyText.setMinHeight(dp(74));
+            emptyText.setBackground(roundStroke(Color.rgb(248, 250, 252), Color.rgb(226, 232, 240), dp(8), 1));
+            packingListGroups.addView(emptyText, matchWrap());
+            return;
+        }
+
+        PackingColumnLayout layout = getBalancedPackingColumnLayout();
+        LinearLayout columns = new LinearLayout(this);
+        columns.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout leftColumn = packingListColumnView(layout.leftGroups);
+        LinearLayout rightColumn = packingListColumnView(layout.rightGroups);
+        columns.addView(leftColumn, packingGroupColumnParams(true));
+        columns.addView(rightColumn, packingGroupColumnParams(false));
+        packingListGroups.addView(columns, spacedMatchWrap(dp(8)));
+
+        TextView totalText = previewText("Packing list total: " + getPackingListTotalWeight() + " kg", 16, true);
+        totalText.setGravity(Gravity.CENTER);
+        totalText.setTextColor(Color.rgb(37, 99, 235));
+        totalText.setPadding(dp(12), dp(12), dp(12), dp(12));
+        totalText.setBackground(roundStroke(Color.rgb(239, 246, 255), Color.rgb(147, 197, 253), dp(8), 1));
+        packingListGroups.addView(totalText, spacedMatchWrap(dp(10)));
+    }
+
+    private LinearLayout.LayoutParams packingGroupColumnParams(boolean left) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        if (left) {
+            params.setMargins(0, 0, dp(6), 0);
+        } else {
+            params.setMargins(dp(6), 0, 0, 0);
+        }
+        return params;
+    }
+
+    private LinearLayout packingListColumnView(List<List<PackingListItem>> groups) {
+        LinearLayout column = new LinearLayout(this);
+        column.setOrientation(LinearLayout.VERTICAL);
+        for (int index = 0; index < groups.size(); index++) {
+            int topMargin = index == 0 ? 0 : dp(8);
+            column.addView(packingListGroupView(groups.get(index)), spacedMatchWrap(topMargin));
+        }
+        return column;
+    }
+
+    private LinearLayout packingListGroupView(List<PackingListItem> group) {
+        PackingListItem first = group.get(0);
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(12), dp(10), dp(12), dp(10));
+        card.setBackground(roundStroke(Color.WHITE, Color.rgb(226, 232, 240), dp(8), 1));
+
+        TextView title = previewText(first.swg + " " + first.spoolSize, 14, true);
+        card.addView(title, matchWrap());
+
+        LinearLayout weightsList = new LinearLayout(this);
+        weightsList.setOrientation(LinearLayout.VERTICAL);
+        weightsList.setPadding(0, dp(4), 0, 0);
+        for (PackingListItem item : group) {
+            weightsList.addView(packingWeightText(item), matchWrap());
+        }
+        card.addView(weightsList, matchWrap());
+
+        TextView total = previewText(getPackingGroupTotalWeight(group) + " kg", 16, true);
+        total.setTextColor(Color.rgb(37, 99, 235));
+        card.addView(total, matchWrap());
+
+        TextView price = previewText("Price: " + getPackingGroupPrice(group), 15, true);
+        price.setTextColor(Color.rgb(17, 24, 39));
+        card.addView(price, matchWrap());
+        return card;
+    }
+
+    private TextView packingWeightText(PackingListItem item) {
+        TextView text = previewText(createPackingWeightEntryText(item), 12, false);
+        text.setTextColor(Color.rgb(55, 65, 81));
+        return text;
+    }
+
+    private String createPackingWeightEntryText(PackingListItem item) {
+        String colourInitial = colourQrCode(item.colour);
+        return colourInitial.isEmpty() ? item.netWeight : item.netWeight + "|" + colourInitial;
+    }
+
+    private Map<String, List<PackingListItem>> getPackingListGroups() {
+        Map<String, List<PackingListItem>> groups = new LinkedHashMap<>();
+        for (PackingListItem item : packingListItems) {
+            String key = packingGroupKey(item);
+            List<PackingListItem> group = groups.get(key);
+            if (group == null) {
+                group = new ArrayList<>();
+                groups.put(key, group);
+            }
+            group.add(item);
+        }
+        return groups;
+    }
+
+    private List<List<PackingListItem>> getSortedPackingListGroups() {
+        List<List<PackingListItem>> groups = new ArrayList<>(getPackingListGroups().values());
+        groups.sort((first, second) -> Integer.compare(second.size(), first.size()));
+        return groups;
+    }
+
+    private PackingColumnLayout getBalancedPackingColumnLayout() {
+        PackingColumnLayout layout = new PackingColumnLayout();
+        for (List<PackingListItem> group : getSortedPackingListGroups()) {
+            int groupHeight = calculatePackingGroupColumnHeight(group) + 22;
+            if (layout.leftHeight <= layout.rightHeight) {
+                layout.leftGroups.add(group);
+                layout.leftHeight += groupHeight;
+            } else {
+                layout.rightGroups.add(group);
+                layout.rightHeight += groupHeight;
+            }
+        }
+        return layout;
+    }
+
+    private String packingGroupKey(PackingListItem item) {
+        return item.swg.trim().toUpperCase(Locale.US)
+                + "|"
+                + normalizeSpoolSize(item.spoolSize).toUpperCase(Locale.US);
+    }
+
+    private String getPackingGroupTotalWeight(List<PackingListItem> group) {
+        double total = 0d;
+        for (PackingListItem item : group) {
+            Double value = parseWeight(item.netWeight);
+            if (value != null) {
+                total += value;
+            }
+        }
+        return trimWeight(total);
+    }
+
+    private String getPackingGroupPrice(List<PackingListItem> group) {
+        if (group.isEmpty()) {
+            return trimMoney(0d);
+        }
+        double groupWeight = getPackingGroupTotalWeightValue(group);
+        PackingListItem first = group.get(0);
+        double rate = getConfiguredBasePrice() + getConfiguredRate(first.swg);
+        return trimMoney(rate * groupWeight);
+    }
+
+    private double getPackingGroupTotalWeightValue(List<PackingListItem> group) {
+        double total = 0d;
+        for (PackingListItem item : group) {
+            Double value = parseWeight(item.netWeight);
+            if (value != null) {
+                total += value;
+            }
+        }
+        return total;
+    }
+
+    private double getConfiguredBasePrice() {
+        return parseConfigNumber(getBasePriceValue());
+    }
+
+    private double getConfiguredRate(String size) {
+        String normalizedSize = size == null ? "" : size.trim();
+        return parseConfigNumber(getConfiguredRateValue(normalizedSize, getDefaultConfiguredRate(normalizedSize)));
+    }
+
+    private String getDefaultConfiguredRate(String size) {
+        String normalizedSize = size == null ? "" : size.trim();
+        for (String[] row : DEFAULT_RATE_CONFIG) {
+            if (row[0].equalsIgnoreCase(normalizedSize)) {
+                return row[1];
+            }
+        }
+        return "0";
+    }
+
+    private double parseConfigNumber(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return 0d;
+        }
+        try {
+            return Double.parseDouble(value.trim());
+        } catch (NumberFormatException exception) {
+            return 0d;
+        }
+    }
+
+    private String trimMoney(double value) {
+        if (Math.abs(value - Math.rint(value)) < 0.0001d) {
+            return String.format(Locale.US, "%.0f", value);
+        }
+        return String.format(Locale.US, "%.2f", value);
+    }
+
+    private String getPackingListTotalWeight() {
+        return trimWeight(getPackingListTotalWeightValue());
+    }
+
+    private double getPackingListTotalWeightValue() {
+        double total = 0d;
+        for (PackingListItem item : packingListItems) {
+            Double value = parseWeight(item.netWeight);
+            if (value != null) {
+                total += value;
+            }
+        }
+        return total;
+    }
+
+    private String getPackingListSizePrice() {
+        double total = 0d;
+        for (List<PackingListItem> group : getSortedPackingListGroups()) {
+            if (group.isEmpty()) {
+                continue;
+            }
+            PackingListItem first = group.get(0);
+            double rate = getConfiguredBasePrice() + getConfiguredRate(first.swg);
+            total += rate * getPackingGroupTotalWeightValue(group);
+        }
+        return trimMoney(total);
+    }
+
+    private List<PackingColourCharge> getPackingColourCharges() {
+        Map<String, Double> colourWeights = new LinkedHashMap<>();
+        for (PackingListItem item : packingListItems) {
+            String colourCode = colourQrCode(item.colour);
+            if (colourCode.isEmpty()) {
+                continue;
+            }
+            Double weight = parseWeight(item.netWeight);
+            if (weight == null) {
+                continue;
+            }
+            Double existing = colourWeights.get(colourCode);
+            colourWeights.put(colourCode, (existing == null ? 0d : existing) + weight);
+        }
+
+        List<PackingColourCharge> charges = new ArrayList<>();
+        for (Map.Entry<String, Double> entry : colourWeights.entrySet()) {
+            double rate = getConfiguredColourRate(entry.getKey());
+            if (Math.abs(rate) < 0.0001d) {
+                continue;
+            }
+            double weight = entry.getValue();
+            charges.add(new PackingColourCharge(entry.getKey(), weight, rate, weight * rate));
+        }
+        return charges;
+    }
+
+    private String getPackingColourPrice(List<PackingColourCharge> charges) {
+        double total = 0d;
+        for (PackingColourCharge charge : charges) {
+            total += charge.amount;
+        }
+        return trimMoney(total);
+    }
+
+    private double getConfiguredColourRate(String colourCode) {
+        String normalizedColour = colourCode == null ? "" : colourCode.trim().toUpperCase(Locale.US);
+        String configKey;
+        if ("W".equals(normalizedColour)) {
+            configKey = "W/R";
+        } else if ("O".equals(normalizedColour)) {
+            configKey = "O/W";
+        } else if ("G".equals(normalizedColour)) {
+            configKey = "G/R";
+        } else if ("C".equals(normalizedColour)) {
+            configKey = "CCR";
+        } else {
+            return 0d;
+        }
+        return getConfiguredRate(configKey);
+    }
+
+    private int calculatePackingGroupColumnHeight(List<PackingListItem> group) {
+        return calculatePackingSegmentHeight(group.size(), true, true);
+    }
+
+    private void clearPackingList() {
+        packingListItems.clear();
+        refreshPackingListView();
+        setActiveScanField(ScanField.PACKING_BOX);
+    }
+
+    private void showPackingListPreviewOverlay() {
+        if (packingListItems.isEmpty()) {
+            Toast.makeText(this, "Scan at least one Box QR", Toast.LENGTH_SHORT).show();
+            setActiveScanField(ScanField.PACKING_BOX);
+            return;
+        }
+
+        List<Bitmap> bitmaps = createPackingListReceiptBitmaps(getPackingListSerialNumber());
+        LinearLayout previewContent = new LinearLayout(this);
+        previewContent.setOrientation(LinearLayout.VERTICAL);
+        previewContent.setPadding(dp(18), dp(12), dp(18), dp(6));
+
+        int previewWidth = Math.min(dp(330), getResources().getDisplayMetrics().widthPixels - dp(82));
+        for (Bitmap bitmap : bitmaps) {
+            ImageView previewImage = new ImageView(this);
+            previewImage.setImageBitmap(bitmap);
+            previewImage.setAdjustViewBounds(true);
+            previewImage.setBackground(roundStroke(Color.WHITE, Color.rgb(226, 232, 240), dp(8), 1));
+            int previewHeight = Math.max(dp(220), Math.round(previewWidth * (bitmap.getHeight() / (float) bitmap.getWidth())));
+            LinearLayout.LayoutParams imageParams = new LinearLayout.LayoutParams(previewWidth, previewHeight);
+            imageParams.setMargins(0, 0, 0, dp(12));
+            previewContent.addView(previewImage, imageParams);
+        }
+
+        ScrollView previewScroll = new ScrollView(this);
+        previewScroll.addView(previewContent, matchParentWrap());
+
+        AlertDialog previewDialog = new AlertDialog.Builder(this)
+                .setTitle("Packing List Preview")
+                .setView(previewScroll)
+                .create();
+
+        LinearLayout actionRow = new LinearLayout(this);
+        actionRow.setOrientation(LinearLayout.HORIZONTAL);
+        actionRow.setPadding(0, dp(18), 0, 0);
+        Button cancelButton = secondaryButton("Cancel");
+        Button printButton = primaryButton("Print", true);
+        LinearLayout.LayoutParams cancelParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        cancelParams.setMargins(0, 0, dp(8), 0);
+        LinearLayout.LayoutParams printParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        printParams.setMargins(dp(8), 0, 0, 0);
+        actionRow.addView(cancelButton, cancelParams);
+        actionRow.addView(printButton, printParams);
+        previewContent.addView(actionRow, matchWrap());
+
+        cancelButton.setOnClickListener(view -> previewDialog.dismiss());
+        printButton.setOnClickListener(view -> {
+            previewDialog.dismiss();
+            printPackingList();
+        });
+        attachPreviewScannerPrint(previewDialog, printButton);
+
+        previewDialog.show();
+    }
+
+    private void printPackingList() {
+        if (selectedPrinter == null) {
+            Toast.makeText(this, "Select a printer first", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        int serialNumber = getPackingListSerialNumber();
+        List<Bitmap> receiptBitmaps = createPackingListReceiptBitmaps(serialNumber);
+        ByteArrayOutputStream commands = new ByteArrayOutputStream();
+        for (Bitmap receiptBitmap : receiptBitmaps) {
+            byte[] pageCommand = TsplBitmapEncoder.buildContinuousBitmap(receiptBitmap, PACKING_LIST_WIDTH_MM, PACKING_LIST_COPIES);
+            commands.write(pageCommand, 0, pageCommand.length);
+        }
+        printBytes(commands.toByteArray());
+        advancePackingListSerialNumber(serialNumber, receiptBitmaps.size());
+        Toast.makeText(this, PACKING_LIST_COPIES + " copies of " + receiptBitmaps.size() + " slip(s) sent to printer", Toast.LENGTH_SHORT).show();
+    }
+
+    private List<Bitmap> createPackingListReceiptBitmaps(int firstSerialNumber) {
+        List<PackingPageLayout> pages = createPackingPageLayouts();
+        List<Bitmap> bitmaps = new ArrayList<>();
+        for (int index = 0; index < pages.size(); index++) {
+            int serialNumber = packingListSerialForOffset(firstSerialNumber, index);
+            bitmaps.add(createPackingListReceiptBitmap(serialNumber, pages.get(index), index == pages.size() - 1));
+        }
+        return bitmaps;
+    }
+
+    private Bitmap createPackingListReceiptBitmap(int serialNumber, PackingPageLayout pageLayout, boolean lastPage) {
+        int width = TsplBitmapEncoder.dotsForMm(PACKING_LIST_WIDTH_MM);
+        int height = TsplBitmapEncoder.dotsForMm(PACKING_LIST_HEIGHT_MM);
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.drawColor(Color.WHITE);
+
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(Color.BLACK);
+        paint.setTypeface(getLabelTypeface());
+        paint.setTextSize(28);
+        paint.setTextAlign(Paint.Align.LEFT);
+        canvas.drawText("S.No: " + formatPackingListSerial(serialNumber), 28, 56, paint);
+        paint.setTextAlign(Paint.Align.RIGHT);
+        canvas.drawText(createPackingListDateText(), width - 28, 56, paint);
+
+        paint.setTextAlign(Paint.Align.LEFT);
+        paint.setStrokeWidth(2);
+        canvas.drawLine(24, 88, width - 24, 88, paint);
+
+        paint.setTypeface(getLabelTypeface());
+        for (PackingSegment segment : pageLayout.segments) {
+            drawPackingSegment(canvas, paint, segment);
+        }
+
+        paint.setTextAlign(Paint.Align.LEFT);
+        paint.setStrokeWidth(2);
+        canvas.drawLine(24, PACKING_LIST_FOOTER_TOP_Y, width - 24, PACKING_LIST_FOOTER_TOP_Y, paint);
+        if (lastPage) {
+            drawPackingListFooter(canvas, paint);
+        } else {
+            paint.setTextSize(24);
+            canvas.drawText("CONTINUED ON NEXT SLIP", 28, PACKING_LIST_FOOTER_TOP_Y + 48, paint);
+        }
+        return bitmap;
+    }
+
+    private void drawPackingListFooter(Canvas canvas, Paint paint) {
+        int footerTop = PACKING_LIST_FOOTER_TOP_Y;
+        int totalWeight = Math.round((float) getPackingListTotalWeightValue() * 100f);
+        String totalWeightText = trimWeight(totalWeight / 100d);
+        List<PackingColourCharge> colourCharges = getPackingColourCharges();
+
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(Color.BLACK);
+        paint.setTypeface(getLabelTypeface());
+        paint.setTextAlign(Paint.Align.LEFT);
+
+        paint.setTextSize(26);
+        canvas.drawText("REELS: " + getPackingListTotalReelCount(), 28, footerTop + 36, paint);
+        canvas.drawText("WT: " + totalWeightText + "kg", 428, footerTop + 36, paint);
+
+        paint.setTextSize(25);
+        canvas.drawText("ROD PRICE:", 28, footerTop + 78, paint);
+        canvas.drawText("SIZE PRICE: " + getPackingListSizePrice(), 28, footerTop + 124, paint);
+        canvas.drawText("COLOUR PRICE: " + getPackingColourPrice(colourCharges), 28, footerTop + 168, paint);
+        canvas.drawText("ROD TOTAL:", 28, footerTop + 212, paint);
+
+        paint.setStrokeWidth(2);
+        canvas.drawLine(224, footerTop + 84, 380, footerTop + 84, paint);
+        canvas.drawLine(224, footerTop + 218, 380, footerTop + 218, paint);
+        canvas.drawLine(416, footerTop + 58, 416, footerTop + 226, paint);
+
+        int colourY = footerTop + 122;
+        paint.setTextSize(20);
+        for (PackingColourCharge charge : colourCharges) {
+            if (colourY > footerTop + 214) {
+                break;
+            }
+            String text = charge.colour
+                    + ": "
+                    + trimWeight(charge.weight)
+                    + " x "
+                    + trimMoney(charge.rate)
+                    + " = "
+                    + trimMoney(charge.amount);
+            drawFitPrintText(canvas, paint, text, 440, colourY, 328, 20, getLabelTypeface());
+            colourY += 44;
+        }
+    }
+
+    private int getPackingListTotalReelCount() {
+        return packingListItems.size();
+    }
+
+    private List<PackingPageLayout> createPackingPageLayouts() {
+        List<PackingPageLayout> pages = new ArrayList<>();
+        PackingPageLayout page = new PackingPageLayout();
+        pages.add(page);
+
+        for (List<PackingListItem> group : getSortedPackingListGroups()) {
+            int startIndex = 0;
+            while (startIndex < group.size()) {
+                SegmentFit fit = findPackingSegmentFit(group, startIndex, page);
+                if (fit.itemCount <= 0) {
+                    page = advancePackingLayoutLane(pages, page);
+                    fit = findPackingSegmentFit(group, startIndex, page);
+                }
+                int lane = page.currentLane;
+                int y = page.laneY[lane];
+                int x = packingLaneX(lane);
+                int laneWidth = packingLaneWidth(lane);
+                PackingSegment segment = new PackingSegment(
+                        group,
+                        startIndex,
+                        startIndex + fit.itemCount,
+                        x,
+                        y,
+                        laneWidth,
+                        fit.height,
+                        fit.showTotal
+                );
+                page.segments.add(segment);
+                page.laneY[lane] += fit.height + PACKING_LIST_SEGMENT_GAP;
+                startIndex += fit.itemCount;
+                if (startIndex < group.size()) {
+                    page = advancePackingLayoutLane(pages, page);
+                }
+            }
+        }
+
+        return pages;
+    }
+
+    private SegmentFit findPackingSegmentFit(List<PackingListItem> group, int startIndex, PackingPageLayout page) {
+        int availableHeight = PACKING_LIST_FOOTER_TOP_Y - PACKING_LIST_SEGMENT_GAP - page.laneY[page.currentLane];
+        int remaining = group.size() - startIndex;
+        for (int itemCount = remaining; itemCount >= 1; itemCount--) {
+            boolean showTotal = itemCount == remaining;
+            if (!showTotal && itemCount >= remaining) {
+                continue;
+            }
+            int height = calculatePackingSegmentHeight(itemCount, showTotal, startIndex == 0);
+            if (height <= availableHeight) {
+                return new SegmentFit(itemCount, height, showTotal);
+            }
+        }
+        return new SegmentFit(0, 0, false);
+    }
+
+    private PackingPageLayout advancePackingLayoutLane(List<PackingPageLayout> pages, PackingPageLayout page) {
+        if (page.currentLane < PACKING_LIST_LANE_COUNT - 1) {
+            page.currentLane++;
+            return page;
+        }
+        PackingPageLayout nextPage = new PackingPageLayout();
+        pages.add(nextPage);
+        return nextPage;
+    }
+
+    private int calculatePackingSegmentHeight(int itemCount, boolean showTotal, boolean showHeader) {
+        int firstEntryBaseline = showHeader
+                ? PACKING_LIST_FIRST_ENTRY_OFFSET
+                : PACKING_LIST_CONTINUED_FIRST_ENTRY_OFFSET;
+        int lastEntryBaseline = firstEntryBaseline + ((Math.max(1, itemCount) - 1) * PACKING_LIST_ENTRY_LINE_HEIGHT);
+        if (showTotal) {
+            return lastEntryBaseline
+                    + PACKING_LIST_ENTRY_TO_TOTAL_LINE_GAP
+                    + PACKING_LIST_TOTAL_LINE_TO_TEXT_GAP
+                    + PACKING_LIST_GROUP_PRICE_LINE_HEIGHT
+                    + PACKING_LIST_SEGMENT_BOTTOM_PADDING;
+        }
+        return lastEntryBaseline + PACKING_LIST_OPEN_SEGMENT_BOTTOM_PADDING;
+    }
+
+    private void drawPackingSegment(Canvas canvas, Paint paint, PackingSegment segment) {
+        PackingListItem first = segment.group.get(0);
+        int x = segment.x;
+        int y = segment.y;
+        int width = segment.width;
+        boolean showHeader = segment.startIndex == 0;
+        boolean openTop = !showHeader;
+        boolean openBottom = !segment.showTotal;
+
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(2);
+        paint.setColor(Color.BLACK);
+        if (openTop || openBottom) {
+            drawOpenPackingSegmentBorder(canvas, paint, x, y, width, segment.height, openTop, openBottom);
+        } else {
+            canvas.drawRoundRect(new RectF(x, y, x + width, y + segment.height), 8, 8, paint);
+        }
+
+        paint.setStyle(Paint.Style.FILL);
+        paint.setTypeface(getLabelTypeface());
+        paint.setTextAlign(Paint.Align.LEFT);
+        if (showHeader) {
+            drawFitPrintText(
+                    canvas,
+                    paint,
+                    first.swg + " " + first.spoolSize,
+                    x + 20,
+                    y + PACKING_LIST_HEADER_BASELINE_OFFSET,
+                    width - 32,
+                    30,
+                    getLabelTypeface()
+            );
+            paint.setStrokeWidth(1.5f);
+            canvas.drawLine(
+                    x + 20,
+                    y + PACKING_LIST_HEADER_LINE_OFFSET,
+                    x + width - 20,
+                    y + PACKING_LIST_HEADER_LINE_OFFSET,
+                    paint
+            );
+        }
+
+        int firstEntryBaseline = y + (showHeader
+                ? PACKING_LIST_FIRST_ENTRY_OFFSET
+                : PACKING_LIST_CONTINUED_FIRST_ENTRY_OFFSET);
+        for (int index = segment.startIndex; index < segment.endIndex; index++) {
+            int relativeIndex = index - segment.startIndex;
+            int entryBaseline = firstEntryBaseline + (relativeIndex * PACKING_LIST_ENTRY_LINE_HEIGHT);
+            drawFitPrintText(
+                    canvas,
+                    paint,
+                    createPackingWeightEntryText(segment.group.get(index)),
+                    x + 20,
+                    entryBaseline,
+                    width - 30,
+                    34,
+                    getLabelRegularTypeface()
+            );
+        }
+
+        if (segment.showTotal) {
+            paint.setStrokeWidth(1.5f);
+            int itemCount = segment.endIndex - segment.startIndex;
+            int lastEntryBaseline = firstEntryBaseline + ((Math.max(1, itemCount) - 1) * PACKING_LIST_ENTRY_LINE_HEIGHT);
+            int totalLineY = lastEntryBaseline + PACKING_LIST_ENTRY_TO_TOTAL_LINE_GAP;
+            canvas.drawLine(x + 20, totalLineY, x + width - 20, totalLineY, paint);
+            drawFitPrintText(
+                    canvas,
+                    paint,
+                    getPackingGroupTotalWeight(segment.group) + "kg",
+                    x + 20,
+                    totalLineY + PACKING_LIST_TOTAL_LINE_TO_TEXT_GAP,
+                    width - 30,
+                    36,
+                    getLabelTypeface()
+            );
+            drawFitPrintText(
+                    canvas,
+                    paint,
+                    getPackingGroupPrice(segment.group),
+                    x + 20,
+                    totalLineY + PACKING_LIST_TOTAL_LINE_TO_TEXT_GAP + PACKING_LIST_GROUP_PRICE_LINE_HEIGHT,
+                    width - 30,
+                    34,
+                    getLabelTypeface()
+            );
+        }
+    }
+
+    private void drawOpenPackingSegmentBorder(Canvas canvas, Paint paint, int x, int y, int width, int height, boolean openTop, boolean openBottom) {
+        int right = x + width;
+        int bottom = y + height;
+        if (!openTop) {
+            canvas.drawLine(x, y, right, y, paint);
+        }
+        canvas.drawLine(x, y, x, bottom, paint);
+        canvas.drawLine(right, y, right, bottom, paint);
+        if (!openBottom) {
+            canvas.drawLine(x, bottom, right, bottom, paint);
+        }
+    }
+
+    private int packingLaneX(int lane) {
+        return 28 + (lane * (packingLaneWidth(lane) + PACKING_LIST_LANE_GAP));
+    }
+
+    private int packingLaneWidth(int lane) {
+        int totalWidth = TsplBitmapEncoder.dotsForMm(PACKING_LIST_WIDTH_MM) - 56;
+        return (totalWidth - ((PACKING_LIST_LANE_COUNT - 1) * PACKING_LIST_LANE_GAP)) / PACKING_LIST_LANE_COUNT;
+    }
+
+    private int getPackingListSerialNumber() {
+        SharedPreferences preferences = getSharedPreferences(APP_PREFS_NAME, MODE_PRIVATE);
+        int serialNumber = preferences.getInt(KEY_PACKING_LIST_SERIAL, 1);
+        return serialNumber < 1 || serialNumber > MAX_PACKING_LIST_SERIAL ? 1 : serialNumber;
+    }
+
+    private int packingListSerialForOffset(int currentSerialNumber, int offset) {
+        return ((currentSerialNumber - 1 + offset) % MAX_PACKING_LIST_SERIAL) + 1;
+    }
+
+    private void advancePackingListSerialNumber(int currentSerialNumber, int steps) {
+        int nextSerialNumber = packingListSerialForOffset(currentSerialNumber, steps);
+        getSharedPreferences(APP_PREFS_NAME, MODE_PRIVATE)
+                .edit()
+                .putInt(KEY_PACKING_LIST_SERIAL, nextSerialNumber)
+                .apply();
+    }
+
+    private String formatPackingListSerial(int serialNumber) {
+        return String.format(Locale.US, "%02d", serialNumber);
+    }
+
+    private String createPackingListDateText() {
+        return new SimpleDateFormat("dd/MM/yyyy", Locale.US).format(new Date());
     }
 
     private ReelScanItem parseReelScan(String qrValue) {
@@ -3537,6 +4425,7 @@ public class MainActivity extends Activity
         setDropdownActive(spoolSizeDropdown, activeScanField == ScanField.SPOOL_SIZE);
         setInputActive(boxBrandInput, activeScanField == ScanField.BRAND);
         setDropdownActive(boxReelScanTarget, activeScanField == ScanField.BOX_REEL);
+        setDropdownActive(packingListScanTarget, activeScanField == ScanField.PACKING_BOX);
         setInputActive(tareWeightInput, activeScanField == ScanField.TARE_WEIGHT);
         setInputActive(grossWeightInput, activeScanField == ScanField.GROSS_WEIGHT);
         setInputActive(spoolWeightInput, activeScanField == ScanField.SPOOL_WEIGHT);
@@ -3580,6 +4469,8 @@ public class MainActivity extends Activity
             selectInputForReplacement(boxBrandInput);
         } else if (activeScanField == ScanField.BOX_REEL && boxReelScanTarget != null) {
             boxReelScanTarget.requestFocus();
+        } else if (activeScanField == ScanField.PACKING_BOX && packingListScanTarget != null) {
+            packingListScanTarget.requestFocus();
         } else if (activeScanField == ScanField.TARE_WEIGHT && tareWeightInput != null) {
             tareWeightInput.requestFocus();
             selectInputForReplacement(tareWeightInput);
@@ -3793,6 +4684,7 @@ public class MainActivity extends Activity
         COLOUR("Colour"),
         BRAND("Brand"),
         BOX_REEL("Reel QR"),
+        PACKING_BOX("Box QR"),
         TARE_WEIGHT("Tare Wt."),
         SPOOL_SIZE("Spool Size"),
         GROSS_WEIGHT("Gross Wt."),
@@ -3831,6 +4723,103 @@ public class MainActivity extends Activity
             this.reelCount = reelCount;
             this.reelWeights = reelWeights;
             this.rawValue = rawValue;
+        }
+    }
+
+    private static final class PackingListItem {
+        private final String swg;
+        private final String spoolSize;
+        private final String colour;
+        private final String netWeight;
+        private final String date;
+        private final String time;
+        private final String rawValue;
+
+        private PackingListItem(String swg, String spoolSize, String colour, String netWeight, String date, String time, String rawValue) {
+            this.swg = swg;
+            this.spoolSize = spoolSize;
+            this.colour = colour;
+            this.netWeight = netWeight;
+            this.date = date;
+            this.time = time;
+            this.rawValue = rawValue;
+        }
+    }
+
+    private static final class SwgSpoolValue {
+        private final String swg;
+        private final String spoolSize;
+
+        private SwgSpoolValue(String swg, String spoolSize) {
+            this.swg = swg == null ? "" : swg;
+            this.spoolSize = spoolSize == null ? "" : spoolSize;
+        }
+    }
+
+    private static final class PackingColumnLayout {
+        private final List<List<PackingListItem>> leftGroups = new ArrayList<>();
+        private final List<List<PackingListItem>> rightGroups = new ArrayList<>();
+        private int leftHeight;
+        private int rightHeight;
+    }
+
+    private static final class PackingPageLayout {
+        private final List<PackingSegment> segments = new ArrayList<>();
+        private final int[] laneY = new int[PACKING_LIST_LANE_COUNT];
+        private int currentLane;
+
+        private PackingPageLayout() {
+            for (int index = 0; index < laneY.length; index++) {
+                laneY[index] = PACKING_LIST_TOP_Y;
+            }
+        }
+    }
+
+    private static final class PackingSegment {
+        private final List<PackingListItem> group;
+        private final int startIndex;
+        private final int endIndex;
+        private final int x;
+        private final int y;
+        private final int width;
+        private final int height;
+        private final boolean showTotal;
+
+        private PackingSegment(List<PackingListItem> group, int startIndex, int endIndex, int x, int y, int width, int height, boolean showTotal) {
+            this.group = group;
+            this.startIndex = startIndex;
+            this.endIndex = endIndex;
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+            this.showTotal = showTotal;
+        }
+    }
+
+    private static final class SegmentFit {
+        private final int itemCount;
+        private final int height;
+        private final boolean showTotal;
+
+        private SegmentFit(int itemCount, int height, boolean showTotal) {
+            this.itemCount = itemCount;
+            this.height = height;
+            this.showTotal = showTotal;
+        }
+    }
+
+    private static final class PackingColourCharge {
+        private final String colour;
+        private final double weight;
+        private final double rate;
+        private final double amount;
+
+        private PackingColourCharge(String colour, double weight, double rate, double amount) {
+            this.colour = colour;
+            this.weight = weight;
+            this.rate = rate;
+            this.amount = amount;
         }
     }
 
@@ -3950,9 +4939,7 @@ public class MainActivity extends Activity
             return;
         }
         String normalizedWeight = normalizeWeightText(weight);
-        if ("Scale Test".equals(activeQrSection)) {
-            appendScaleDiagnosticParsed(normalizedWeight);
-        } else if ("Spool QR".equals(activeQrSection)) {
+        if ("Spool QR".equals(activeQrSection)) {
             setSpoolWeight(normalizedWeight, true);
         } else if ("Reel QR".equals(activeQrSection)) {
             if (activeScanField != ScanField.GROSS_WEIGHT) {
@@ -3971,9 +4958,6 @@ public class MainActivity extends Activity
     public void onScaleRawData(String data) {
         if (data == null || data.trim().isEmpty()) {
             return;
-        }
-        if ("Scale Test".equals(activeQrSection)) {
-            appendScaleDiagnosticRaw(data.trim());
         }
         setScaleStatusText("Scale data: " + data.trim());
     }
