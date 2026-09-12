@@ -86,6 +86,12 @@ public class MainActivity extends Activity
     private static final String[] REEL_BATCH_COUNT_OPTIONS = {
             "1", "2", "4", "8", "16", "18"
     };
+    private static final String REEL_MODE_PRODUCTION = "Production Reel";
+    private static final String REEL_MODE_OUTSIDE_BOX = "Outside Box";
+    private static final String[] REEL_MODE_OPTIONS = {
+            REEL_MODE_PRODUCTION, REEL_MODE_OUTSIDE_BOX
+    };
+    private static final String OUTSIDE_BOX_QR_PREFIX = "OBX";
     private static final String[] SWG_OPTIONS = {
             "",
             "8", "9", "10", "11", "12", "13", "14", "15",
@@ -155,9 +161,11 @@ public class MainActivity extends Activity
     private EditText swgInput;
     private TextView colourDropdown;
     private TextView spoolSizeDropdown;
+    private TextView reelModeDropdown;
     private TextView reelBatchCountDropdown;
     private TextView reelBatchStatusText;
     private LinearLayout reelBatchList;
+    private TextView outsideBoxSummaryScanTarget;
     private EditText boxBrandInput;
     private TextView boxReelScanTarget;
     private TextView boxReelCountText;
@@ -179,9 +187,12 @@ public class MainActivity extends Activity
     private String netWeight = "";
     private String spoolWeight = "";
     private int selectedReelBatchCount = 1;
+    private String selectedReelMode = REEL_MODE_PRODUCTION;
     private int printedReelsInBatch;
     private String activeReelBatchId = "";
+    private String activeOutsideBoxBatchId = "";
     private String activeSingleReelId = "";
+    private boolean printingOutsideBoxReelLabels;
     private String lastCompletedReelBatchId = "";
     private String lastCompletedReelBatchTotal = "";
     private int lastCompletedReelBatchCount;
@@ -227,6 +238,7 @@ public class MainActivity extends Activity
     private final List<String> reelBatchNetWeights = new ArrayList<>();
     private final List<BatchReelItem> reelBatchItems = new ArrayList<>();
     private final List<BatchReelItem> lastCompletedReelBatchItems = new ArrayList<>();
+    private final List<BatchReelItem> outsideBoxReelItems = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -358,6 +370,8 @@ public class MainActivity extends Activity
                 if (generateQrButton != null && generateQrButton.isEnabled()) {
                     if ("Spool QR".equals(activeQrSection)) {
                         submitSpoolQr();
+                    } else if (isOutsideBoxMode()) {
+                        handleOutsideBoxAction();
                     } else if (isReelBatchMode()) {
                         printCurrentBatchReelIfReady();
                     } else if ("Reel QR".equals(activeQrSection)) {
@@ -441,10 +455,15 @@ public class MainActivity extends Activity
         title.setPadding(0, dp(4), 0, dp(18));
         card.addView(title, matchWrap());
 
+        reelModeDropdown = dropdownField();
+        setDropdownText(reelModeDropdown, selectedReelMode);
+        reelModeDropdown.setOnClickListener(view -> showDropdown(reelModeDropdown, REEL_MODE_OPTIONS, value -> selectReelMode(value)));
+        addLabeledView(card, "Reel Mode", reelModeDropdown);
+
         reelBatchCountDropdown = dropdownField();
         setDropdownText(reelBatchCountDropdown, String.valueOf(selectedReelBatchCount));
         reelBatchCountDropdown.setOnClickListener(view -> showDropdown(reelBatchCountDropdown, REEL_BATCH_COUNT_OPTIONS, value -> selectReelBatchCount(value)));
-        addLabeledView(card, "Reel Count", reelBatchCountDropdown);
+        addLabeledView(card, isOutsideBoxMode() ? "Outside Box Reel Count" : "Reel Count", reelBatchCountDropdown);
 
         reelBatchStatusText = deviceStatusText("");
         reelBatchStatusText.setPadding(0, 0, 0, dp(6));
@@ -474,27 +493,45 @@ public class MainActivity extends Activity
         LinearLayout secondDetailRow = detailRow();
         spoolSizeDropdown = addDropdownField(secondDetailRow, "Spool Size", SPOOL_SIZE_OPTIONS, ScanField.SPOOL_SIZE, value -> selectSpoolSize(value, false));
         setDropdownText(spoolSizeDropdown, selectedSpoolSize);
-        tareWeightInput = input("Tare Wt.", tareWeight);
-        configureWeightInput(tareWeightInput, ScanField.TARE_WEIGHT, value -> setTareWeight(value, true));
-        addInputField(secondDetailRow, "Tare Wt.", tareWeightInput, ScanField.TARE_WEIGHT);
+        if (isOutsideBoxMode()) {
+            netWeightInput = input("Net Wt.", netWeight);
+            configureWeightInput(netWeightInput, ScanField.NET_WEIGHT, value -> setOutsideBoxNetWeight(value, true));
+            addInputField(secondDetailRow, "Net Wt.", netWeightInput, ScanField.NET_WEIGHT);
+        } else {
+            tareWeightInput = input("Tare Wt.", tareWeight);
+            configureWeightInput(tareWeightInput, ScanField.TARE_WEIGHT, value -> setTareWeight(value, true));
+            addInputField(secondDetailRow, "Tare Wt.", tareWeightInput, ScanField.TARE_WEIGHT);
+        }
         card.addView(secondDetailRow, matchWrap());
 
-        LinearLayout thirdDetailRow = detailRow();
-        grossWeightInput = input("Gross Wt.", grossWeight);
-        configureWeightInput(grossWeightInput, ScanField.GROSS_WEIGHT, value -> setGrossWeight(value, true));
-        addInputField(thirdDetailRow, "Gross Wt.", grossWeightInput, ScanField.GROSS_WEIGHT);
-        card.addView(thirdDetailRow, matchWrap());
+        if (!isOutsideBoxMode()) {
+            LinearLayout thirdDetailRow = detailRow();
+            grossWeightInput = input("Gross Wt.", grossWeight);
+            configureWeightInput(grossWeightInput, ScanField.GROSS_WEIGHT, value -> setGrossWeight(value, true));
+            addInputField(thirdDetailRow, "Gross Wt.", grossWeightInput, ScanField.GROSS_WEIGHT);
+            card.addView(thirdDetailRow, matchWrap());
 
-        netWeightInput = input("Net Wt.", netWeight);
-        netWeightInput.setEnabled(false);
-        netWeightInput.setTextColor(Color.rgb(17, 24, 39));
-        netWeightInput.setBackground(roundStroke(Color.rgb(248, 250, 252), Color.rgb(220, 224, 230), dp(9), 1));
-        addLabeledView(card, "Net Wt.", netWeightInput);
+            netWeightInput = input("Net Wt.", netWeight);
+            netWeightInput.setEnabled(false);
+            netWeightInput.setTextColor(Color.rgb(17, 24, 39));
+            netWeightInput.setBackground(roundStroke(Color.rgb(248, 250, 252), Color.rgb(220, 224, 230), dp(9), 1));
+            addLabeledView(card, "Net Wt.", netWeightInput);
+        }
+
+        if (isOutsideBoxMode()) {
+            outsideBoxSummaryScanTarget = dropdownField();
+            outsideBoxSummaryScanTarget.setText("Scan Outside Box Summary QR");
+            outsideBoxSummaryScanTarget.setCompoundDrawablesWithIntrinsicBounds(0, 0, android.R.drawable.ic_menu_camera, 0);
+            outsideBoxSummaryScanTarget.setOnClickListener(view -> setActiveScanField(ScanField.OUTSIDE_BOX_SUMMARY));
+            addLabeledView(card, "Dispatch Print", outsideBoxSummaryScanTarget);
+        }
 
         generateQrButton = primaryButton("Print Label", false);
-        generateQrButton.setText("Print Label");
+        generateQrButton.setText(getReelActionText());
         generateQrButton.setOnClickListener(view -> {
-            if (isReelBatchMode()) {
+            if (isOutsideBoxMode()) {
+                handleOutsideBoxAction();
+            } else if (isReelBatchMode()) {
                 printCurrentBatchReelIfReady();
             } else {
                 printSingleReelIfReady();
@@ -1940,26 +1977,37 @@ public class MainActivity extends Activity
         drawFitPrintText(canvas, paint, "COLOUR", 318, 72, 160, 17, reelTypeface);
         drawFitPrintText(canvas, paint, selectedColour, 316, 128, 270, 46, reelTypeface);
 
+        boolean outsideBoxIndividualLabel = printingOutsideBoxReelLabels;
+        float netBoxBottom = outsideBoxIndividualLabel ? 318 : 282;
+
         paint.setColor(Color.rgb(248, 248, 248));
         paint.setStyle(Paint.Style.FILL);
-        canvas.drawRoundRect(new RectF(18, 150, width - 18, 282), 8, 8, paint);
+        canvas.drawRoundRect(new RectF(18, 150, width - 18, netBoxBottom), 8, 8, paint);
         paint.setColor(Color.BLACK);
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(2);
-        canvas.drawRoundRect(new RectF(18, 150, width - 18, 282), 8, 8, paint);
+        canvas.drawRoundRect(new RectF(18, 150, width - 18, netBoxBottom), 8, 8, paint);
         paint.setStyle(Paint.Style.FILL);
 
-        drawFitPrintText(canvas, paint, "NET WT.", 38, 188, 250, 24, reelTypeface);
-        drawFitPrintText(canvas, paint, netWeight + "kg", 36, 250, 390, 60, reelTypeface);
+        drawFitPrintText(canvas, paint, "NET WT.", 38, outsideBoxIndividualLabel ? 190 : 188, 250, 24, reelTypeface);
+        drawFitPrintText(canvas, paint, netWeight + "kg", 36, outsideBoxIndividualLabel ? 270 : 250, 390, outsideBoxIndividualLabel ? 72 : 60, reelTypeface);
 
         Bitmap packedQr = QrCodeGenerator.create(createReelQrData(), 420);
-        canvas.drawBitmap(packedQr, null, new RectF(450, 158, 566, 274), null);
+        canvas.drawBitmap(packedQr, null, outsideBoxIndividualLabel
+                ? new RectF(436, 166, 566, 296)
+                : new RectF(450, 158, 566, 274), null);
 
-        drawFitPrintText(canvas, paint, "GROSS WT: " + grossWeight + "kg", 28, 328, 345, 32, reelTypeface);
-        drawFitPrintText(canvas, paint, "TARE WT: " + tareWeight + "kg", 28, 366, 345, 32, reelTypeface);
-        drawFitPrintText(canvas, paint, "SPOOL: " + selectedSpoolSize, 388, 322, 190, 20, reelTypeface);
-        drawFitPrintText(canvas, paint, (isReelBatchMode() ? "BATCH: " : "ID: ") + getCurrentReelUniqueId(), 388, 352, 190, 18, reelTypeface);
-        drawFitPrintText(canvas, paint, "PACKED BY: " + getEnteredByName(), 388, 382, 190, 18, reelTypeface);
+        if (outsideBoxIndividualLabel) {
+            drawFitPrintText(canvas, paint, "SPOOL: " + selectedSpoolSize, 28, 346, 180, 22, reelTypeface);
+            drawFitPrintText(canvas, paint, "ID: " + getCurrentReelUniqueId(), 222, 346, 345, 22, reelTypeface);
+            drawFitPrintText(canvas, paint, "PACKED BY: " + getEnteredByName(), 28, 382, 530, 20, reelTypeface);
+        } else {
+            drawFitPrintText(canvas, paint, "GROSS WT: " + grossWeight + "kg", 28, 328, 345, 32, reelTypeface);
+            drawFitPrintText(canvas, paint, "TARE WT: " + tareWeight + "kg", 28, 366, 345, 32, reelTypeface);
+            drawFitPrintText(canvas, paint, "SPOOL: " + selectedSpoolSize, 388, 322, 190, 20, reelTypeface);
+            drawFitPrintText(canvas, paint, (isReelBatchMode() ? "BATCH: " : "ID: ") + getCurrentReelUniqueId(), 388, 352, 190, 18, reelTypeface);
+            drawFitPrintText(canvas, paint, "PACKED BY: " + getEnteredByName(), 388, 382, 190, 18, reelTypeface);
+        }
         return labelBitmap;
     }
 
@@ -1994,6 +2042,40 @@ public class MainActivity extends Activity
 
         String qrData = batchId + "," + selectedSwg + "," + colourQrCode(selectedColour) + "," + selectedSpoolSize + "," + totalNetWeight + "kg," + reelCount + "," + createBatchReelWeightsPayload();
         Bitmap batchQr = QrCodeGenerator.create(qrData, 420);
+        canvas.drawBitmap(batchQr, null, new RectF(420, 115, 580, 275), null);
+        return labelBitmap;
+    }
+
+    private Bitmap createOutsideBoxSummaryPrintBitmap(String batchId, String totalNetWeight, int reelCount) {
+        int width = TsplBitmapEncoder.dotsForMm(LabelSize.REEL_3X2_INCH.getWidthMm());
+        int height = TsplBitmapEncoder.dotsForMm(LabelSize.REEL_3X2_INCH.getHeightMm());
+        Bitmap labelBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(labelBitmap);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        Typeface reelTypeface = getLabelTypeface();
+
+        paint.setColor(Color.WHITE);
+        paint.setStyle(Paint.Style.FILL);
+        canvas.drawRect(0, 0, width, height, paint);
+
+        paint.setColor(Color.BLACK);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(2);
+        canvas.drawRect(1, 1, width - 2, height - 2, paint);
+        paint.setStyle(Paint.Style.FILL);
+
+        drawCenteredPrintText(canvas, paint, "REEL BATCH SUMMARY", width / 2f, 38, 30, reelTypeface);
+        canvas.drawLine(18, 52, width - 18, 52, paint);
+
+        drawFitPrintText(canvas, paint, "BATCH ID", 28, 92, 250, 24, reelTypeface);
+        drawFitPrintText(canvas, paint, batchId, 28, 142, 360, 48, reelTypeface);
+
+        drawFitPrintText(canvas, paint, "TOTAL NET WT.", 28, 202, 290, 25, reelTypeface);
+        drawFitPrintText(canvas, paint, totalNetWeight + "kg", 28, 270, 370, 64, reelTypeface);
+        drawFitPrintText(canvas, paint, "REELS: " + reelCount, 28, 332, 220, 30, reelTypeface);
+        drawFitPrintText(canvas, paint, "PACKED BY: " + getEnteredByName(), 28, 382, 360, 20, reelTypeface);
+
+        Bitmap batchQr = QrCodeGenerator.create(createOutsideBoxQrPayload(batchId, totalNetWeight, reelCount), 420);
         canvas.drawBitmap(batchQr, null, new RectF(420, 115, 580, 275), null);
         return labelBitmap;
     }
@@ -2478,11 +2560,13 @@ public class MainActivity extends Activity
             enabled = !getSpoolWeightValue().isEmpty();
         } else if ("BOX QR".equals(activeQrSection)) {
             enabled = !selectedBrand.trim().isEmpty() && !boxReels.isEmpty();
+        } else if (isOutsideBoxMode()) {
+            enabled = outsideBoxReelItems.size() >= selectedReelBatchCount || allDropdownsPopulated();
         } else {
             enabled = allDropdownsPopulated();
         }
         generateQrButton.setEnabled(enabled);
-        generateQrButton.setText(isReelBatchMode() ? "Print Current Reel" : "Print Label");
+        generateQrButton.setText(getReelActionText());
         generateQrButton.setTextColor(enabled ? Color.rgb(37, 99, 235) : Color.rgb(148, 163, 184));
         generateQrButton.setBackground(enabled
                 ? roundStroke(Color.rgb(239, 246, 255), Color.rgb(37, 99, 235), dp(9), 1)
@@ -2490,6 +2574,12 @@ public class MainActivity extends Activity
     }
 
     private boolean allDropdownsPopulated() {
+        if (isOutsideBoxMode()) {
+            return !selectedSwg.trim().isEmpty()
+                    && !selectedColour.trim().isEmpty()
+                    && !selectedSpoolSize.trim().isEmpty()
+                    && parseWeight(netWeight) != null;
+        }
         return !selectedSwg.trim().isEmpty()
                 && !selectedColour.trim().isEmpty()
                 && !tareWeight.trim().isEmpty()
@@ -2694,6 +2784,8 @@ public class MainActivity extends Activity
                 } else if (input == grossWeightInput) {
                     grossWeight = text == null ? "" : text.toString().trim();
                     updateNetWeight();
+                } else if (input == netWeightInput && isOutsideBoxMode()) {
+                    netWeight = text == null ? "" : text.toString().trim();
                 }
                 updateGenerateButtonState();
             }
@@ -2729,6 +2821,9 @@ public class MainActivity extends Activity
         if (activeScanField == ScanField.SPOOL_WEIGHT) {
             setSpoolWeight(value, true);
             return;
+        } else if (activeScanField == ScanField.OUTSIDE_BOX_SUMMARY) {
+            printOutsideBoxReelsFromSummary(value);
+            return;
         } else if (activeScanField == ScanField.SWG) {
             selectSwg(value, true);
             return;
@@ -2753,6 +2848,9 @@ public class MainActivity extends Activity
             return;
         } else if (activeScanField == ScanField.GROSS_WEIGHT) {
             setGrossWeight(value, true);
+            return;
+        } else if (activeScanField == ScanField.NET_WEIGHT) {
+            setOutsideBoxNetWeight(value, true);
             return;
         } else {
             matched = false;
@@ -2830,7 +2928,7 @@ public class MainActivity extends Activity
         setDropdownText(spoolSizeDropdown, selectedSpoolSize);
         updateGenerateButtonState();
         if (advance) {
-            setActiveScanField(ScanField.TARE_WEIGHT);
+            setActiveScanField(isOutsideBoxMode() ? ScanField.NET_WEIGHT : ScanField.TARE_WEIGHT);
         }
     }
 
@@ -2858,12 +2956,25 @@ public class MainActivity extends Activity
             setDropdownText(reelBatchCountDropdown, String.valueOf(selectedReelBatchCount));
             return;
         }
+        if (isOutsideBoxMode()) {
+            newCount = Math.max(2, newCount);
+        }
+        if (isOutsideBoxMode() && newCount < outsideBoxReelItems.size()) {
+            Toast.makeText(this, "Reel Count cannot be less than entered weights", Toast.LENGTH_SHORT).show();
+            setDropdownText(reelBatchCountDropdown, String.valueOf(selectedReelBatchCount));
+            return;
+        }
 
         selectedReelBatchCount = newCount;
         setDropdownText(reelBatchCountDropdown, String.valueOf(selectedReelBatchCount));
         if (isReelBatchMode()) {
             clearLastCompletedReelBatch();
             ensureReelBatchId();
+        } else if (isOutsideBoxMode()) {
+            ensureOutsideBoxBatchId();
+            if (outsideBoxReelItems.size() < selectedReelBatchCount) {
+                setActiveScanField(ScanField.NET_WEIGHT);
+            }
         } else {
             activeReelBatchId = "";
             printedReelsInBatch = 0;
@@ -2873,6 +2984,27 @@ public class MainActivity extends Activity
         updateReelBatchStatusText();
         refreshReelBatchList();
         updateGenerateButtonState();
+    }
+
+    private void selectReelMode(String value) {
+        String mode = value == null || value.trim().isEmpty() ? REEL_MODE_PRODUCTION : value.trim();
+        if (mode.equals(selectedReelMode)) {
+            return;
+        }
+        selectedReelMode = mode;
+        tareWeight = "";
+        grossWeight = "";
+        netWeight = "";
+        printedReelsInBatch = 0;
+        activeReelBatchId = "";
+        activeOutsideBoxBatchId = "";
+        reelBatchNetWeights.clear();
+        reelBatchItems.clear();
+        outsideBoxReelItems.clear();
+        if (isOutsideBoxMode() && selectedReelBatchCount < 2) {
+            selectedReelBatchCount = 2;
+        }
+        buildScreen();
     }
 
     private int parseBatchCount(String value) {
@@ -2885,12 +3017,31 @@ public class MainActivity extends Activity
     }
 
     private boolean isReelBatchMode() {
-        return "Reel QR".equals(activeQrSection) && selectedReelBatchCount > 1;
+        return "Reel QR".equals(activeQrSection)
+                && REEL_MODE_PRODUCTION.equals(selectedReelMode)
+                && !printingOutsideBoxReelLabels
+                && selectedReelBatchCount > 1;
+    }
+
+    private boolean isOutsideBoxMode() {
+        return "Reel QR".equals(activeQrSection) && REEL_MODE_OUTSIDE_BOX.equals(selectedReelMode);
+    }
+
+    private boolean isSingleReelMode() {
+        return "Reel QR".equals(activeQrSection)
+                && REEL_MODE_PRODUCTION.equals(selectedReelMode)
+                && selectedReelBatchCount == 1;
     }
 
     private void ensureReelBatchId() {
         if (activeReelBatchId == null || activeReelBatchId.trim().isEmpty()) {
             activeReelBatchId = generateBatchId();
+        }
+    }
+
+    private void ensureOutsideBoxBatchId() {
+        if (activeOutsideBoxBatchId == null || activeOutsideBoxBatchId.trim().isEmpty()) {
+            activeOutsideBoxBatchId = generateBatchId();
         }
     }
 
@@ -2926,7 +3077,13 @@ public class MainActivity extends Activity
             return;
         }
         if (!isReelBatchMode()) {
-            reelBatchStatusText.setText("Single reel label");
+            if (isOutsideBoxMode()) {
+                ensureOutsideBoxBatchId();
+                reelBatchStatusText.setText("Outside box " + activeOutsideBoxBatchId + " · "
+                        + outsideBoxReelItems.size() + "/" + selectedReelBatchCount + " entered");
+            } else {
+                reelBatchStatusText.setText("Single reel label");
+            }
             return;
         }
         ensureReelBatchId();
@@ -2938,9 +3095,11 @@ public class MainActivity extends Activity
             return;
         }
         reelBatchList.removeAllViews();
-        List<BatchReelItem> rows = reelBatchItems;
-        String title = "Printed reels total: " + getReelBatchTotalNetWeight() + "kg";
-        if (!isReelBatchMode()) {
+        List<BatchReelItem> rows = isOutsideBoxMode() ? outsideBoxReelItems : reelBatchItems;
+        String title = isOutsideBoxMode()
+                ? "Outside box total: " + getOutsideBoxTotalNetWeight() + "kg"
+                : "Printed reels total: " + getReelBatchTotalNetWeight() + "kg";
+        if (!isReelBatchMode() && !isOutsideBoxMode()) {
             rows = lastCompletedReelBatchItems;
             title = lastCompletedReelBatchId.trim().isEmpty()
                     ? ""
@@ -2967,7 +3126,7 @@ public class MainActivity extends Activity
         row.setPadding(dp(12), dp(10), dp(12), dp(10));
         row.setBackground(roundStroke(Color.rgb(248, 250, 252), Color.rgb(226, 232, 240), dp(8), 1));
 
-        TextView title = previewText("Reel " + (index + 1) + " printed", 14, true);
+        TextView title = previewText("Reel " + (index + 1) + (isOutsideBoxMode() ? " entered" : " printed"), 14, true);
         title.setTextColor(Color.rgb(17, 24, 39));
         row.addView(title, matchWrap());
 
@@ -4256,6 +4415,258 @@ public class MainActivity extends Activity
         return hasWeight ? trimWeight(total) : "0";
     }
 
+    private String getOutsideBoxTotalNetWeight() {
+        double total = 0d;
+        boolean hasWeight = false;
+        for (BatchReelItem item : outsideBoxReelItems) {
+            Double value = parseWeight(item.netWeight);
+            if (value != null) {
+                total += value;
+                hasWeight = true;
+            }
+        }
+        return hasWeight ? trimWeight(total) : "0";
+    }
+
+    private String createOutsideBoxWeightsPayload() {
+        StringBuilder builder = new StringBuilder();
+        for (BatchReelItem item : outsideBoxReelItems) {
+            String normalizedWeight = normalizeWeightText(item.netWeight);
+            if (normalizedWeight.trim().isEmpty()) {
+                continue;
+            }
+            if (builder.length() > 0) {
+                builder.append("|");
+            }
+            builder.append(normalizedWeight);
+        }
+        return builder.toString();
+    }
+
+    private String createOutsideBoxQrPayload(String batchId, String totalNetWeight, int reelCount) {
+        return batchId
+                + "," + selectedSwg
+                + "," + colourQrCode(selectedColour)
+                + "," + selectedSpoolSize
+                + "," + totalNetWeight + "kg"
+                + "," + reelCount
+                + "," + createOutsideBoxWeightsPayload()
+                + "," + OUTSIDE_BOX_QR_PREFIX;
+    }
+
+    private void setOutsideBoxNetWeight(String value, boolean advance) {
+        String netValue = normalizeWeightText(value);
+        if (advance && parseWeight(netValue) == null) {
+            clearNetWeightValue();
+            updateGenerateButtonState();
+            Toast.makeText(this, "Enter complete Net Wt.", Toast.LENGTH_SHORT).show();
+            if (netWeightInput != null) {
+                netWeightInput.requestFocus();
+            }
+            return;
+        }
+        netWeight = netValue;
+        if (netWeightInput != null) {
+            netWeightInput.setText(netWeight);
+            netWeightInput.setSelection(netWeightInput.getText().length());
+        }
+        updateGenerateButtonState();
+        if (advance) {
+            handleOutsideBoxAction();
+        }
+    }
+
+    private void handleOutsideBoxAction() {
+        if (!isOutsideBoxMode()) {
+            return;
+        }
+        if (outsideBoxReelItems.size() >= selectedReelBatchCount) {
+            printOutsideBoxSummaryIfReady();
+            return;
+        }
+        addOutsideBoxReelWeight();
+    }
+
+    private void addOutsideBoxReelWeight() {
+        if (!allDropdownsPopulated()) {
+            Toast.makeText(this, "Complete outside box reel details", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (parseWeight(netWeight) == null) {
+            Toast.makeText(this, "Enter valid Net Wt.", Toast.LENGTH_SHORT).show();
+            setActiveScanField(ScanField.NET_WEIGHT);
+            return;
+        }
+        ensureOutsideBoxBatchId();
+        outsideBoxReelItems.add(new BatchReelItem(selectedSwg, selectedColour, selectedSpoolSize, netWeight));
+        netWeight = "";
+        clearNetWeightValue();
+        updateReelBatchStatusText();
+        refreshReelBatchList();
+        updateGenerateButtonState();
+        if (outsideBoxReelItems.size() >= selectedReelBatchCount) {
+            Toast.makeText(this, "Outside box ready. Tap Print Summary QR", Toast.LENGTH_LONG).show();
+            setActiveScanField(ScanField.DONE);
+        } else {
+            setActiveScanField(ScanField.NET_WEIGHT);
+        }
+    }
+
+    private void printOutsideBoxSummaryIfReady() {
+        if (outsideBoxReelItems.size() != selectedReelBatchCount) {
+            Toast.makeText(this, "Enter all outside box reel weights first", Toast.LENGTH_SHORT).show();
+            setActiveScanField(ScanField.NET_WEIGHT);
+            return;
+        }
+        if (selectedPrinter == null) {
+            Toast.makeText(this, "Select a printer first", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        ensureOutsideBoxBatchId();
+        String completedBatchId = activeOutsideBoxBatchId;
+        String totalNetWeight = getOutsideBoxTotalNetWeight();
+        int reelCount = outsideBoxReelItems.size();
+        printBytes(TsplBitmapEncoder.buildBitmapLabel(
+                createOutsideBoxSummaryPrintBitmap(completedBatchId, totalNetWeight, reelCount),
+                LabelSize.REEL_3X2_INCH
+        ));
+        Toast.makeText(this, "Outside box summary printed: " + completedBatchId, Toast.LENGTH_LONG).show();
+        activeOutsideBoxBatchId = "";
+        outsideBoxReelItems.clear();
+        netWeight = "";
+        updateReelBatchStatusText();
+        refreshReelBatchList();
+        updateGenerateButtonState();
+        setActiveScanField(ScanField.NET_WEIGHT);
+    }
+
+    private void printOutsideBoxReelsFromSummary(String qrValue) {
+        OutsideBoxBatch batch = parseOutsideBoxBatch(qrValue);
+        if (batch == null) {
+            Toast.makeText(this, "Invalid outside box summary QR", Toast.LENGTH_SHORT).show();
+            setActiveScanField(ScanField.OUTSIDE_BOX_SUMMARY);
+            return;
+        }
+        if (selectedPrinter == null) {
+            Toast.makeText(this, "Select a printer first", Toast.LENGTH_SHORT).show();
+            setActiveScanField(ScanField.OUTSIDE_BOX_SUMMARY);
+            return;
+        }
+
+        String previousSwg = selectedSwg;
+        String previousColour = selectedColour;
+        String previousSpoolSize = selectedSpoolSize;
+        String previousTareWeight = tareWeight;
+        String previousGrossWeight = grossWeight;
+        String previousNetWeight = netWeight;
+        String previousSingleReelId = activeSingleReelId;
+        String previousMode = selectedReelMode;
+        boolean previousPrintingOutsideBoxReelLabels = printingOutsideBoxReelLabels;
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try {
+            selectedReelMode = REEL_MODE_PRODUCTION;
+            printingOutsideBoxReelLabels = true;
+            selectedSwg = batch.swg;
+            selectedColour = colourNameFromCode(batch.colour);
+            selectedSpoolSize = batch.spoolSize;
+            tareWeight = "0";
+            for (int index = 0; index < batch.weights.size(); index++) {
+                netWeight = batch.weights.get(index);
+                grossWeight = netWeight;
+                activeSingleReelId = batch.batchId + "-" + String.format(Locale.US, "%02d", index + 1);
+                output.writeBytes(TsplBitmapEncoder.buildBitmapLabel(createReelLabelPrintBitmap(), LabelSize.REEL_3X2_INCH));
+            }
+        } finally {
+            selectedReelMode = previousMode;
+            selectedSwg = previousSwg;
+            selectedColour = previousColour;
+            selectedSpoolSize = previousSpoolSize;
+            tareWeight = previousTareWeight;
+            grossWeight = previousGrossWeight;
+            netWeight = previousNetWeight;
+            activeSingleReelId = previousSingleReelId;
+            printingOutsideBoxReelLabels = previousPrintingOutsideBoxReelLabels;
+        }
+
+        printBytes(output.toByteArray());
+        Toast.makeText(this, batch.weights.size() + " outside box reel labels sent", Toast.LENGTH_LONG).show();
+        setActiveScanField(ScanField.OUTSIDE_BOX_SUMMARY);
+    }
+
+    private OutsideBoxBatch parseOutsideBoxBatch(String qrValue) {
+        String raw = qrValue == null ? "" : qrValue.trim();
+        String[] parts = raw.split(",", -1);
+        if (parts.length >= 8 && OUTSIDE_BOX_QR_PREFIX.equalsIgnoreCase(parts[0].trim())) {
+            return parsePrefixedOutsideBoxBatch(parts);
+        }
+        if (parts.length < 8 || !OUTSIDE_BOX_QR_PREFIX.equalsIgnoreCase(parts[parts.length - 1].trim())) {
+            return null;
+        }
+        String batchId = parts[0].trim();
+        String swg = parts[1].trim();
+        String colour = parts[2].trim();
+        String spoolSize = normalizeSpoolSize(parts[3].trim());
+        String weightsPayload = parts[6].trim();
+        int reelCount = parsePositiveInt(parts[5].trim(), 1);
+        if (batchId.isEmpty() || swg.isEmpty() || colour.isEmpty() || spoolSize.isEmpty() || weightsPayload.isEmpty()) {
+            return null;
+        }
+        return createOutsideBoxBatch(batchId, swg, colour, spoolSize, reelCount, weightsPayload);
+    }
+
+    private OutsideBoxBatch parsePrefixedOutsideBoxBatch(String[] parts) {
+        String batchId = parts[1].trim();
+        String swg = parts[2].trim();
+        String colour = parts[3].trim();
+        String spoolSize = normalizeSpoolSize(parts[4].trim());
+        int reelCount = parsePositiveInt(parts[5].trim(), 1);
+        String weightsPayload = parts[7].trim();
+        if (batchId.isEmpty() || swg.isEmpty() || colour.isEmpty() || spoolSize.isEmpty() || weightsPayload.isEmpty()) {
+            return null;
+        }
+        return createOutsideBoxBatch(batchId, swg, colour, spoolSize, reelCount, weightsPayload);
+    }
+
+    private OutsideBoxBatch createOutsideBoxBatch(String batchId, String swg, String colour, String spoolSize, int reelCount, String weightsPayload) {
+        List<String> weights = new ArrayList<>();
+        String[] weightParts = weightsPayload.split("\\|");
+        for (String weightPart : weightParts) {
+            String weight = normalizeWeightText(weightPart.replace("kg", "").replace("KG", "").trim());
+            if (parseWeight(weight) == null) {
+                return null;
+            }
+            weights.add(weight);
+        }
+        if (weights.isEmpty() || weights.size() != reelCount) {
+            return null;
+        }
+        return new OutsideBoxBatch(batchId, swg, colour, spoolSize, weights);
+    }
+
+    private String colourNameFromCode(String colour) {
+        String value = colour == null ? "" : colour.trim();
+        if (value.equalsIgnoreCase("B")) {
+            return "Black";
+        } else if (value.equalsIgnoreCase("G")) {
+            return "Green";
+        } else if (value.equalsIgnoreCase("O")) {
+            return "Off white";
+        } else if (value.equalsIgnoreCase("W")) {
+            return "White";
+        }
+        return value;
+    }
+
+    private String getReelActionText() {
+        if (isOutsideBoxMode()) {
+            return outsideBoxReelItems.size() >= selectedReelBatchCount
+                    ? "Print Summary QR"
+                    : "Add Reel Weight";
+        }
+        return isReelBatchMode() ? "Print Current Reel" : "Print Label";
+    }
+
     private boolean hasValidReelWeights() {
         Double tare = parseWeight(tareWeight);
         Double gross = parseWeight(grossWeight);
@@ -4406,7 +4817,8 @@ public class MainActivity extends Activity
                 || scanField == ScanField.BRAND
                 || scanField == ScanField.TARE_WEIGHT
                 || scanField == ScanField.GROSS_WEIGHT
-                || scanField == ScanField.SPOOL_WEIGHT;
+                || scanField == ScanField.SPOOL_WEIGHT
+                || scanField == ScanField.NET_WEIGHT;
     }
 
     private void clearTextFocusForScannerField(ScanField scanField) {
@@ -4426,8 +4838,10 @@ public class MainActivity extends Activity
         setInputActive(boxBrandInput, activeScanField == ScanField.BRAND);
         setDropdownActive(boxReelScanTarget, activeScanField == ScanField.BOX_REEL);
         setDropdownActive(packingListScanTarget, activeScanField == ScanField.PACKING_BOX);
+        setDropdownActive(outsideBoxSummaryScanTarget, activeScanField == ScanField.OUTSIDE_BOX_SUMMARY);
         setInputActive(tareWeightInput, activeScanField == ScanField.TARE_WEIGHT);
         setInputActive(grossWeightInput, activeScanField == ScanField.GROSS_WEIGHT);
+        setInputActive(netWeightInput, activeScanField == ScanField.NET_WEIGHT);
         setInputActive(spoolWeightInput, activeScanField == ScanField.SPOOL_WEIGHT);
     }
 
@@ -4471,12 +4885,17 @@ public class MainActivity extends Activity
             boxReelScanTarget.requestFocus();
         } else if (activeScanField == ScanField.PACKING_BOX && packingListScanTarget != null) {
             packingListScanTarget.requestFocus();
+        } else if (activeScanField == ScanField.OUTSIDE_BOX_SUMMARY && outsideBoxSummaryScanTarget != null) {
+            outsideBoxSummaryScanTarget.requestFocus();
         } else if (activeScanField == ScanField.TARE_WEIGHT && tareWeightInput != null) {
             tareWeightInput.requestFocus();
             selectInputForReplacement(tareWeightInput);
         } else if (activeScanField == ScanField.GROSS_WEIGHT && grossWeightInput != null) {
             grossWeightInput.requestFocus();
             selectInputForReplacement(grossWeightInput);
+        } else if (activeScanField == ScanField.NET_WEIGHT && netWeightInput != null) {
+            netWeightInput.requestFocus();
+            selectInputForReplacement(netWeightInput);
         } else if (activeScanField == ScanField.SPOOL_WEIGHT && spoolWeightInput != null) {
             spoolWeightInput.requestFocus();
             selectInputForReplacement(spoolWeightInput);
@@ -4685,7 +5104,9 @@ public class MainActivity extends Activity
         BRAND("Brand"),
         BOX_REEL("Reel QR"),
         PACKING_BOX("Box QR"),
+        OUTSIDE_BOX_SUMMARY("Outside Box QR"),
         TARE_WEIGHT("Tare Wt."),
+        NET_WEIGHT("Net Wt."),
         SPOOL_SIZE("Spool Size"),
         GROSS_WEIGHT("Gross Wt."),
         SPOOL_WEIGHT("Spool Wt."),
@@ -4834,6 +5255,22 @@ public class MainActivity extends Activity
             this.colour = colour;
             this.spoolSize = spoolSize;
             this.netWeight = netWeight;
+        }
+    }
+
+    private static final class OutsideBoxBatch {
+        private final String batchId;
+        private final String swg;
+        private final String colour;
+        private final String spoolSize;
+        private final List<String> weights;
+
+        private OutsideBoxBatch(String batchId, String swg, String colour, String spoolSize, List<String> weights) {
+            this.batchId = batchId;
+            this.swg = swg;
+            this.colour = colour;
+            this.spoolSize = spoolSize;
+            this.weights = weights;
         }
     }
 
